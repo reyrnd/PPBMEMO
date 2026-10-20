@@ -3,9 +3,11 @@ import 'package:flutter/material.dart';
 class AppTheme {
   static const Color background = Color(0xFFFFFFFF);
   static const Color textPrimary = Color(0xFF2A2926);
+  static const Color primary = Color(0xFF0F172A);
   static const Color textSecondary = Color(0xFF5C5750);
   static const Color surface = Color(0xFFF5F4F1);
   static const Color border = Color(0xFFE2DDD0);
+  static const Color bgPill = Color(0xFFF1F5F9);
 
   static ThemeData get lightTheme {
     return ThemeData(
@@ -45,6 +47,34 @@ class AppTheme {
           ),
         ),
       ),
+    );
+  }
+
+  static InputDecoration pillInput({
+    String? hint,
+    Widget? prefixIcon,
+    Widget? suffixIcon,
+  }) {
+    OutlineInputBorder border([Color? color]) => OutlineInputBorder(
+          borderRadius: BorderRadius.circular(30),
+          borderSide: color == null
+              ? BorderSide.none
+              : BorderSide(color: color, width: 1),
+        );
+
+    return InputDecoration(
+      hintText: hint,
+      hintStyle: const TextStyle(color: Colors.black38),
+      prefixIcon: prefixIcon,
+      suffixIcon: suffixIcon,
+      filled: true,
+      fillColor: const Color(0xFFF4F5F7),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      border: border(),
+      enabledBorder: border(),
+      focusedBorder: border(textPrimary),
+      errorBorder: border(Colors.redAccent),
+      focusedErrorBorder: border(Colors.redAccent),
     );
   }
 }

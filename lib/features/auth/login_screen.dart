@@ -147,10 +147,10 @@ class _LoginScreenState extends State<LoginScreen> {
                   const SizedBox(height: 32),
 
                   // --- Input Email ---
-                  Row(
+                  const Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
+                      Text(
                         'Email',
                         style: TextStyle(
                             fontWeight: FontWeight.w600, fontSize: 14),
