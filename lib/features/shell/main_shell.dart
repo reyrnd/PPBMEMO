@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:memospace/features/activity/activity_screen.dart';
 import 'package:memospace/features/workspace/workspace_list_screen.dart';
 import '../../core/app_theme.dart';
 import '../home/home_screen.dart';
 import '../library/library_screen.dart';
+import '../activity/activity_screen.dart';
 
 class MainShell extends StatefulWidget {
   const MainShell({super.key});
@@ -15,11 +17,13 @@ class _MainShellState extends State<MainShell> {
   int _index = 0;
 
   List<Widget> get _pages => [
-        HomeScreen(onSeeAllWorkspaces: () => setState(() => _index = 2)),
+        HomeScreen(
+          onSeeAllWorkspaces: () => setState(() => _index = 2),
+          onSeeAllActivities: () => setState(() => _index = 3),
+        ),
         const LibraryScreen(),
         const WorkspaceListScreen(),
-        const Center(
-            child: Text('Profil')), // ganti nanti dengan halaman profil
+        const ActivityScreen(),
       ];
 
   @override
@@ -49,9 +53,10 @@ class _MainShellState extends State<MainShell> {
               activeIcon: Icon(Icons.dashboard),
               label: 'Workspace'),
           BottomNavigationBarItem(
-              icon: Icon(Icons.account_circle_outlined),
-              activeIcon: Icon(Icons.account_circle),
-              label: 'Profil'),
+            icon: Icon(Icons.notifications),
+            activeIcon: Icon(Icons.notifications),
+            label: 'Aktivitas',
+          ),
         ],
       ),
     );

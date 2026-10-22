@@ -5,7 +5,8 @@ import 'core/app_theme.dart';
 import 'features/splash/splash_screen.dart';
 import 'features/auth/login_screen.dart';
 import 'features/auth/register_screen.dart';
-import 'features/home/home_screen.dart';
+// import 'features/home/home_screen.dart';
+import 'features/shell/main_shell.dart';
 
 void main() {
   runApp(const MemoSpaceApp());
@@ -25,7 +26,8 @@ class MemoSpaceApp extends StatelessWidget {
         AppRoutes.splash: (context) => const SplashScreen(),
         AppRoutes.login: (context) => const LoginScreen(),
         AppRoutes.register: (context) => const RegisterScreen(),
-        AppRoutes.home: (context) => const HomeScreen(),
+        // AppRoutes.home: (context) => const HomeScreen(),
+        AppRoutes.home: (context) => const MainShell(),
       },
     );
   }
