@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/app_routes.dart';
@@ -20,10 +21,9 @@ class _SplashScreenState extends State<SplashScreen> {
     Timer(const Duration(milliseconds: 1500), () {
       if (!mounted) return;
 
+      final loggedIn = FirebaseAuth.instance.currentUser != null;
       Navigator.pushReplacementNamed(
-        context,
-        AppRoutes.login,
-      );
+          context, loggedIn ? AppRoutes.home : AppRoutes.login);
     });
   }
 

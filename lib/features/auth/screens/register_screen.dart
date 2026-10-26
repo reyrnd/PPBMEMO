@@ -1,4 +1,6 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:memospace/services/auth_service.dart';
 
 import '../../../core/app_routes.dart';
 import '../../../core/app_theme.dart';
@@ -30,14 +32,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
     super.dispose();
   }
 
-  void _handleRegister() {
+  void _handleRegister() async {
     if (!_formKey.currentState!.validate()) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Validasi berhasil. Pendaftaran belum dihubungkan.'),
-      ),
-    );
+    try {
+      await AuthService().register(_nameController.text, _emailController.text,
+          _passwordController.text);
+      if (!mounted) return;
+      Navigator.pushNamedAndRemoveUntil(context, AppRoutes.home, (r) => false);
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(AuthService().errorMessage(e))));
+    }
   }
 
   @override

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "476964429942",
+    "project_id": "memospace-329aa",
+    "storage_bucket": "memospace-329aa.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:476964429942:android:f2c0b51ddf4a5f12b23f57",
+        "android_client_info": {
+          "package_name": "com.example.memospace"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAW8dFtup3UOnCShr0hC91HFz2TztlK0RM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

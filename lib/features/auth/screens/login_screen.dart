@@ -1,5 +1,7 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:memospace/features/auth/screens/register_screen.dart';
+import 'package:memospace/services/auth_service.dart';
 
 import '../../../core/app_routes.dart';
 import '../../../core/app_theme.dart';
@@ -26,15 +28,18 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  void _handleLogin() {
+  void _handleLogin() async {
     if (!_formKey.currentState!.validate()) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Validasi berhasil.')),
-    );
-    Navigator.pushReplacementNamed(
-      context,
-      AppRoutes.home, // Memanggil rute home yang telah didaftarkan di main.dart
-    );
+    try {
+      await AuthService()
+          .login(_emailController.text, _passwordController.text);
+      if (!mounted) return;
+      Navigator.pushReplacementNamed(context, AppRoutes.home);
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(AuthService().errorMessage(e))));
+    }
   }
 
   @override

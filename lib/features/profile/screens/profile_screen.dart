@@ -7,6 +7,7 @@ import 'package:memospace/features/profile/screens/edit_profile_screen.dart';
 import 'package:memospace/features/profile/screens/help_screen.dart';
 import 'package:memospace/features/profile/screens/language_screen.dart';
 import 'package:memospace/core/widgets/user_avatar.dart';
+import 'package:memospace/services/auth_service.dart';
 import '../../../core/app_theme.dart';
 
 class ProfileScreen extends StatelessWidget {
@@ -204,11 +205,12 @@ class ProfileScreen extends StatelessWidget {
 
               // --- 9. TOMBOL KELUAR ---
               OutlinedButton.icon(
-                onPressed: () => Navigator.pushNamedAndRemoveUntil(
-                  context,
-                  AppRoutes.login,
-                  (route) => false,
-                ),
+                onPressed: () async {
+                  await AuthService().logout();
+                  if (!context.mounted) return;
+                  Navigator.pushNamedAndRemoveUntil(
+                      context, AppRoutes.login, (r) => false);
+                },
                 icon: const Icon(Icons.logout,
                     size: 18, color: AppTheme.textPrimary),
                 label: const Text(
@@ -289,7 +291,7 @@ class ProfileScreen extends StatelessWidget {
         border: Border.all(color: const Color(0xFFE5E7EB)),
       ),
       child: Column(
-children: List.generate(items.length, (index) {
+        children: List.generate(items.length, (index) {
           if (index == items.length - 1) {
             return items[index];
           }
