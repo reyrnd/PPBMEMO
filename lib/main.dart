@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 
 import 'core/app_routes.dart';
 import 'core/app_theme.dart';
-import 'features/splash/splash_screen.dart';
-import 'features/auth/login_screen.dart';
-import 'features/auth/register_screen.dart';
+import 'features/splash/screens/splash_screen.dart';
+import 'features/auth/screens/login_screen.dart';
+import 'features/auth/screens/register_screen.dart';
 // import 'features/home/home_screen.dart';
 import 'features/shell/main_shell.dart';
 

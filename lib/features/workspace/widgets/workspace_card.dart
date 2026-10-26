@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import '../../../core/app_theme.dart';
+import 'package:memospace/core/app_theme.dart';
+import 'package:memospace/core/widgets/avatar_stack.dart';
 import '../models/workspace.dart';
 
 class WorkspaceCard extends StatelessWidget {
@@ -53,27 +54,7 @@ class WorkspaceCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              SizedBox(
-                width: 12.0 * workspace.memberInitials.length + 8,
-                height: 20,
-                child: Stack(
-                  children: [
-                    for (var i = 0; i < workspace.memberInitials.length; i++)
-                      Positioned(
-                        left: i * 12.0,
-                        child: CircleAvatar(
-                          radius: 10,
-                          backgroundColor: i == 0 ? Colors.black : Colors.grey,
-                          child: Text(
-                            workspace.memberInitials[i],
-                            style: const TextStyle(
-                                fontSize: 8, color: Colors.white),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
+              AvatarStack(workspace.memberInitials),
               Text(workspace.time,
                   style: const TextStyle(fontSize: 10, color: Colors.black38)),
             ],

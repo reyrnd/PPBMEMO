@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:memospace/core/widgets/user_avatar.dart';
+import 'package:memospace/core/utils/date_formatter.dart';
 import '../../../core/app_theme.dart';
 import '../models/activity.dart';
 
@@ -11,15 +13,7 @@ class ActivityRow extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        CircleAvatar(
-          radius: 14,
-          backgroundColor: const Color(0xFFF4F5F7),
-          child: Text(activity.initials,
-              style: const TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme.textPrimary)),
-        ),
+        UserAvatar(activity.initials, 14, color: AppTheme.surface),
         const SizedBox(width: 10),
         Expanded(
           child: Column(
@@ -40,7 +34,7 @@ class ActivityRow extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 2),
-              Text(activity.time,
+              Text(DateFormatter.getRelativeTimeText(activity.time),
                   style: const TextStyle(fontSize: 11, color: Colors.black38)),
             ],
           ),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import '../../features/profile/profile_screen.dart';
+import 'package:memospace/features/notification/screens/notification_screen.dart';
+import '../../features/profile/screens/profile_screen.dart';
 import '../app_theme.dart';
 
 class MemoAppBar extends StatelessWidget implements PreferredSizeWidget {
@@ -25,8 +26,15 @@ class MemoAppBar extends StatelessWidget implements PreferredSizeWidget {
       ),
       actions: [
         IconButton(
-          icon: const Icon(Icons.search, color: AppTheme.textPrimary, size: 24),
-          onPressed: () {},
+          icon: const Icon(Icons.notifications_rounded,
+              color: AppTheme.textPrimary, size: 24),
+          onPressed: () {
+            // 💡 Navigasi ke halaman notifikasi saat tombol ditekan
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const NotificationScreen()),
+            );
+          },
         ),
         Padding(
           padding: const EdgeInsets.only(right: 16, left: 4),
