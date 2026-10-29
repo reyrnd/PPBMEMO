@@ -73,17 +73,33 @@ class _InviteSheetState extends State<InviteSheet> {
       if (!mounted) return;
       _emailController.clear();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Undangan berhasil dikirim.')),
+        const SnackBar(content: Text('Anggota berhasil ditambahkan.')),
       );
-    } catch (_) {
-      // Handle error jika diperlukan
+    } catch (error) {
+      if (!mounted) return;
+      final message = error.toString().replaceFirst('Exception: ', '');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
     } finally {
       if (mounted) setState(() => _isSending = false);
     }
   }
 
   Future<void> _shareInvite() async {
-    await widget.onShareInvite(widget.inviteCode);
+    try {
+      await widget.onShareInvite(widget.inviteCode);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Kode undangan disalin untuk dibagikan.')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      final message = error.toString().replaceFirst('Exception: ', '');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+    }
   }
 
   @override
@@ -172,7 +188,7 @@ class _InviteSheetState extends State<InviteSheet> {
                             ),
                           ),
                           const Text(
-                            'Exp. 7 hari',
+                            'Kode aktif',
                             style: TextStyle(
                               fontSize: 12,
                               color: AppTheme.textSecondary,
@@ -214,7 +230,7 @@ class _InviteSheetState extends State<InviteSheet> {
                             icon: const Icon(Icons.share_outlined,
                                 size: 14, color: Colors.white),
                             label: const Text(
-                              'Bagikan',
+                              'Salin untuk dibagikan',
                               style: TextStyle(
                                 color: Colors.white,
                                 fontWeight: FontWeight.bold,
@@ -238,7 +254,7 @@ class _InviteSheetState extends State<InviteSheet> {
 
               // --- 2. SEKSI UNDANG VIA EMAIL ---
               const Text(
-                'Undang via Email Mahasiswa',
+                'Tambah akun melalui email',
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 13,
@@ -257,7 +273,7 @@ class _InviteSheetState extends State<InviteSheet> {
                   style: const TextStyle(
                       color: AppTheme.textPrimary, fontSize: 14),
                   decoration: InputDecoration(
-                    hintText: 'nama@mahasiswa.ac.id',
+                    hintText: 'nama@email.com',
                     hintStyle:
                         const TextStyle(color: Colors.black38, fontSize: 14),
                     prefixIcon: const Icon(Icons.email_outlined,
@@ -293,7 +309,7 @@ class _InviteSheetState extends State<InviteSheet> {
                       )
                     : const Icon(Icons.play_arrow_outlined, size: 16),
                 label: const Text(
-                  'Kirim undangan',
+                  'Tambahkan anggota',
                   style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
                 ),
                 style: ElevatedButton.styleFrom(
@@ -305,7 +321,7 @@ class _InviteSheetState extends State<InviteSheet> {
                 ),
               ),
               const SizedBox(height: 28),
-// --- 3. DAFTAR ANGGOTA WORKSPACE ---
+              // --- 3. DAFTAR ANGGOTA WORKSPACE ---
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -348,13 +364,16 @@ class _InviteSheetState extends State<InviteSheet> {
                 ],
               ),
               const SizedBox(height: 10),
-// Looping komponen baris anggota yang telah ditingkatkan detailnya
+              if (widget.members.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  child: Text(
+                    'Belum ada anggota.',
+                    style: TextStyle(color: AppTheme.textSecondary),
+                  ),
+                ),
               ...widget.members.map((member) {
                 final isOwner = member.role == MemberRole.owner;
-// Simulasi pembuatan teks email dari data objek anggota jika model memiliki properti email
-// (Ganti member.name.toLowerCase().replaceAll(' ', '.') dengan field dinamis jika tersedia)
-                final emailSimulated =
-                    '${member.name.toLowerCase().replaceAll(' ', '.')}@mahasiswa.ac.id';
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   child: Row(
@@ -383,15 +402,6 @@ class _InviteSheetState extends State<InviteSheet> {
                                 fontWeight: FontWeight.bold,
                                 fontSize: 14,
                               ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              emailSimulated,
-                              style: const TextStyle(
-                                color: AppTheme.textSecondary,
-                                fontSize: 11,
-                              ),
-                              overflow: TextOverflow.ellipsis,
                             ),
                           ],
                         ),

@@ -1,13 +1,15 @@
 // workspace_picker_sheet.dart
 import 'package:flutter/material.dart';
+import 'package:memospace/features/workspace/models/workspace.dart';
 
 class WorkspacePickerSheet extends StatefulWidget {
-  final String
-      activeWorkspace; // Menyimpan workspace yang sedang aktif saat ini
+  final List<Workspace> workspaces; // daftar dari WorkspaceCubit
+  final String? activeWorkspaceId; // null = "Semua workspace"
 
   const WorkspacePickerSheet({
     super.key,
-    required this.activeWorkspace,
+    required this.workspaces,
+    required this.activeWorkspaceId,
   });
 
   @override
@@ -15,53 +17,33 @@ class WorkspacePickerSheet extends StatefulWidget {
 }
 
 class _WorkspacePickerSheetState extends State<WorkspacePickerSheet> {
-  late String _selectedWorkspace;
-
-  // Struktur Data untuk menyimpan daftar item sesuai gambar desain Anda
-  final List<Map<String, dynamic>> _workspaces = [
-    {
-      'title': 'Semua workspace',
-      'subtitle': 'Semua memo & berkas',
-      'tag': null,
-      'icon': Icons.widgets_outlined,
-      'isDefault': true,
-    },
-    {
-      'title': 'Proyek Robot AUV',
-      'subtitle': '6 anggota',
-      'tag': 'Robotika & Elektro',
-      'icon': Icons.precision_manufacturing_outlined,
-      'isDefault': false,
-    },
-    {
-      'title': 'Proyek PPB',
-      'subtitle': '4 anggota',
-      'tag': 'Pemrograman Mobile',
-      'icon': Icons.phone_android_outlined,
-      'isDefault': false,
-    },
-    {
-      'title': 'Rapat Mingguan',
-      'subtitle': '8 anggota',
-      'tag': 'Organisasi',
-      'icon': Icons.people_outline,
-      'isDefault': false,
-    },
-    {
-      'title': 'Skripsi',
-      'subtitle': '2 anggota',
-      'tag': 'Akademik',
-      'icon': Icons.school_outlined,
-      'isDefault': false,
-    },
-  ];
+  String? _selectedId;
 
   @override
   void initState() {
     super.initState();
-    _selectedWorkspace = widget.activeWorkspace;
+    _selectedId = widget.activeWorkspaceId;
   }
 
+  List<Map<String, dynamic>> get _workspaces => [
+        <String, dynamic>{
+          'id': null,
+          'title': 'Semua workspace',
+          'subtitle': 'Semua memo & berkas',
+          'tag': null,
+          'icon': Icons.widgets_outlined,
+          'isDefault': true,
+        },
+        for (final w in widget.workspaces)
+          <String, dynamic>{
+            'id': w.id,
+            'title': w.title,
+            'subtitle': '${w.memberInitials.length} anggota',
+            'tag': w.category,
+            'icon': Icons.folder_outlined,
+            'isDefault': false,
+          },
+      ];
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -113,7 +95,7 @@ class _WorkspacePickerSheetState extends State<WorkspacePickerSheet> {
               },
               itemBuilder: (context, index) {
                 final item = _workspaces[index];
-                final bool isSelected = _selectedWorkspace == item['title'];
+                final bool isSelected = _selectedId == item['id'];
                 final bool isDefaultItem = item['isDefault'];
 
                 return Padding(
@@ -206,9 +188,9 @@ class _WorkspacePickerSheetState extends State<WorkspacePickerSheet> {
                             ),
                           ),
                     onTap: () {
-                      setState(() => _selectedWorkspace = item['title']);
-                      // Kirim data kembali ke halaman utama dan langsung tutup sheet
-                      Navigator.pop(context, item['title']);
+                      setState(() => _selectedId = item['id']);
+                      Navigator.pop(
+                          context, {'id': item['id'], 'title': item['title']});
                     },
                   ),
                 );

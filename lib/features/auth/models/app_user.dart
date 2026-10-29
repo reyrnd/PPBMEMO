@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class AppUser {
   final String id;
   final String name;
@@ -55,5 +57,16 @@ class AppUser {
       'photoUrl': photoUrl,
       'bio': bio,
     };
+  }
+
+  factory AppUser.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
+    final d = doc.data()!;
+    return AppUser(
+      id: doc.id,
+      name: d['name'] ?? '',
+      email: d['email'] ?? '',
+      bio: d['bio'],
+      photoUrl: d['photoUrl'],
+    );
   }
 }

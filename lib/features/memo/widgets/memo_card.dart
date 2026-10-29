@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/app_theme.dart';
+import '../../../core/utils/date_formatter.dart';
 import '../models/memo.dart';
 
 class MemoCard extends StatelessWidget {
@@ -93,12 +94,12 @@ class MemoCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(memo.author,
+              Text(memo.authorName,
                   style: const TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
                       color: AppTheme.textPrimary)),
-              Text('•  ${memo.time}',
+              Text('•  ${DateFormatter.getRelativeTimeText(memo.updatedAt)}',
                   style: const TextStyle(fontSize: 12, color: Colors.black38)),
             ],
           ),

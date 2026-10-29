@@ -1,4 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:memospace/features/memo/cubit/memo_cubit.dart';
+import 'package:memospace/features/memo/data/memo_repository.dart';
+import 'package:memospace/features/workspace/cubit/workspace_cubit.dart';
+import 'package:memospace/features/workspace/data/workspace_repository.dart';
 
 import 'core/app_routes.dart';
 import 'core/app_theme.dart';
@@ -13,7 +18,16 @@ import 'firebase_options.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  runApp(const MemoSpaceApp());
+
+  runApp(
+    MultiBlocProvider(
+      providers: [
+        BlocProvider(create: (_) => WorkspaceCubit(WorkspaceRepository())),
+        BlocProvider(create: (_) => MemoCubit(MemoRepository())),
+      ],
+      child: const MemoSpaceApp(),
+    ),
+  );
 }
 
 class MemoSpaceApp extends StatelessWidget {

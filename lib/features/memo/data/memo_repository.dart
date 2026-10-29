@@ -1,71 +1,86 @@
 import 'dart:async';
 
-import 'package:memospace/features/memo/data/dummy_memos.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:memospace/features/memo/models/memo.dart';
+import 'package:rxdart/rxdart.dart';
 
 class MemoRepository {
-  MemoRepository({List<Memo>? initialMemos})
-      : _memos = List<Memo>.of(initialMemos ?? dummyMemos);
+  final _db = FirebaseFirestore.instance;
+  User get _user => FirebaseAuth.instance.currentUser!;
 
-  final List<Memo> _memos;
-  final StreamController<List<Memo>> _memoChanges =
-      StreamController<List<Memo>>.broadcast();
+  CollectionReference<Map<String, dynamic>> _memos(String wsId) =>
+      _db.collection('workspaces').doc(wsId).collection('memos');
 
-  List<Memo> getMemos() => List<Memo>.unmodifiable(_memos);
+  // Semua memo dari semua workspace milikku (Home dan Library), realtime
+  Stream<List<Memo>> watchAllMyMemos() =>
+      FirebaseAuth.instance.authStateChanges().switchMap((user) {
+        if (user == null) return Stream.value(<Memo>[]);
+        return _db
+            .collection('workspaces')
+            .where('memberIds', arrayContains: user.uid)
+            .snapshots()
+            .switchMap((snap) {
+          if (snap.docs.isEmpty) return Stream.value(<Memo>[]);
+          return Rx.combineLatestList(snap.docs.map((w) => w.reference
+                  .collection('memos')
+                  .snapshots()
+                  .map((s) => s.docs.map(Memo.fromDoc).toList())))
+              .map((lists) => lists.expand((l) => l).toList()
+                ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt)));
+        });
+      });
 
-  Stream<List<Memo>> watchMemos() {
-    return Stream<List<Memo>>.multi((controller) {
-      controller.add(getMemos());
-      final subscription = _memoChanges.stream.listen(
-        controller.add,
-        onError: controller.addError,
-      );
-      controller.onCancel = subscription.cancel;
+  Stream<List<Memo>> watchWorkspaceMemos(String wsId) =>
+      _memos(wsId).snapshots().map((s) => s.docs.map(Memo.fromDoc).toList()
+        ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt)));
+
+  Future<void> save(Memo m, {required bool isNew}) async {
+    final u = _user;
+    final wsRef = _db.collection('workspaces').doc(m.workspaceId);
+    final memoRef = _memos(m.workspaceId).doc(m.id.isEmpty ? null : m.id);
+    final batch = _db.batch();
+    batch.set(
+      memoRef,
+      {
+        ...m.toMap(),
+        'authorId': u.uid,
+        'authorName': u.displayName ?? '',
+        'updatedAt': FieldValue.serverTimestamp(),
+        if (isNew) 'createdAt': FieldValue.serverTimestamp(),
+      },
+      SetOptions(merge: true),
+    );
+    batch.update(wsRef, {
+      if (isNew) 'memoCount': FieldValue.increment(1),
+      'updatedAt': FieldValue.serverTimestamp(),
     });
+    batch.set(wsRef.collection('activities').doc(), {
+      'actorId': u.uid,
+      'actorName': u.displayName ?? '',
+      'type': isNew ? 'memo_created' : 'memo_edited',
+      'targetTitle': m.title,
+      'memoId': memoRef.id,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+    await batch.commit();
   }
 
-  Memo? getMemo(String id) {
-    for (final memo in _memos) {
-      if (memo.id == id) return memo;
-    }
-    return null;
+  Future<void> delete(String wsId, String memoId) async {
+    final wsRef = _db.collection('workspaces').doc(wsId);
+    final batch = _db.batch();
+    batch.delete(_memos(wsId).doc(memoId));
+    batch.update(wsRef, {'memoCount': FieldValue.increment(-1)});
+    await batch.commit();
   }
 
-  void saveMemo(Memo memo) {
-    final index =
-        _memos.indexWhere((existingMemo) => existingMemo.id == memo.id);
-    if (index == -1) {
-      _memos.add(memo);
-    } else {
-      _memos[index] = memo;
-    }
-    _notifyChanges();
-  }
+  Future<void> toggleBookmark(String wsId, String memoId, bool on) =>
+      _memos(wsId).doc(memoId).update({
+        'bookmarkedBy': on
+            ? FieldValue.arrayUnion([_user.uid])
+            : FieldValue.arrayRemove([_user.uid]),
+      });
 
-  bool deleteMemo(String id) {
-    final originalLength = _memos.length;
-    _memos.removeWhere((memo) => memo.id == id);
-    final removedCount = originalLength - _memos.length;
-    if (removedCount > 0) {
-      _notifyChanges();
-      return true;
-    }
-    return false;
-  }
-
-  bool toggleBookmark(String id) {
-    final index = _memos.indexWhere((memo) => memo.id == id);
-    if (index == -1) return false;
-
-    final memo = _memos[index];
-    _memos[index] = memo.copyWith(isBookmarked: !memo.isBookmarked);
-    _notifyChanges();
-    return true;
-  }
-
-  void _notifyChanges() {
-    _memoChanges.add(getMemos());
-  }
-
-  Future<void> dispose() => _memoChanges.close();
+  Future<void> setArchived(String wsId, String memoId, bool v) =>
+      _memos(wsId).doc(memoId).update({'archived': v});
 }

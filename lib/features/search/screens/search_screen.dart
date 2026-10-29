@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:memospace/core/app_theme.dart';
-import 'package:memospace/features/memo/data/dummy_memos.dart';
+import 'package:memospace/features/memo/cubit/memo_cubit.dart';
 import 'package:memospace/features/memo/models/memo.dart';
 import 'package:memospace/features/memo/widgets/memo_card.dart';
-import 'package:memospace/features/workspace/data/dummy_workspaces.dart';
+import 'package:memospace/features/workspace/cubit/workspace_cubit.dart';
 import 'package:memospace/features/workspace/models/workspace.dart';
 
 enum _SearchFilter { all, memo, workspace, file }
@@ -60,11 +61,12 @@ class _SearchScreenState extends State<SearchScreen> {
     if (_filter != _SearchFilter.all && _filter != _SearchFilter.memo) {
       return const [];
     }
-    return dummyMemos.where((memo) {
+    final memos = context.watch<MemoCubit>().state;
+    return memos.where((memo) {
       return _contains(memo.title) ||
           _contains(memo.content) ||
           _contains(memo.category) ||
-          _contains(memo.author);
+          _contains(memo.authorName);
     }).toList();
   }
 
@@ -72,7 +74,8 @@ class _SearchScreenState extends State<SearchScreen> {
     if (_filter != _SearchFilter.all && _filter != _SearchFilter.workspace) {
       return const [];
     }
-    return dummyWorkspaces.where((workspace) {
+    final workspaces = context.watch<WorkspaceCubit>().state;
+    return workspaces.where((workspace) {
       return _contains(workspace.title) || _contains(workspace.category);
     }).toList();
   }
@@ -81,8 +84,9 @@ class _SearchScreenState extends State<SearchScreen> {
     if (_filter != _SearchFilter.all && _filter != _SearchFilter.file) {
       return const [];
     }
+    final memos = context.watch<MemoCubit>().state;
     return [
-      for (final memo in dummyMemos)
+      for (final memo in memos)
         if (memo.fileName != null &&
             (_matches(memo.fileName!) ||
                 _matches(memo.title) ||

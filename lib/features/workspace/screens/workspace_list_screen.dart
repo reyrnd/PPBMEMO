@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:memospace/core/app_theme.dart';
+import 'package:memospace/core/utils/date_formatter.dart';
 import 'package:memospace/core/widgets/memo_app_bar.dart';
-import 'package:memospace/features/workspace/data/dummy_workspaces.dart';
+import 'package:memospace/features/workspace/cubit/workspace_cubit.dart';
 import 'package:memospace/features/workspace/models/workspace.dart';
 import 'package:memospace/features/workspace/screens/create_join_workspace_screen.dart';
+import 'package:memospace/features/workspace/screens/workspace_detail_screen.dart';
 
 class WorkspaceListScreen extends StatefulWidget {
   const WorkspaceListScreen({super.key});
@@ -18,7 +21,8 @@ class _WorkspaceListScreenState extends State<WorkspaceListScreen> {
 
   List<Workspace> get _filteredWorkspaces {
     final query = _searchController.text.trim().toLowerCase();
-    return dummyWorkspaces.where((workspace) {
+    final workspaces = context.watch<WorkspaceCubit>().state;
+    return workspaces.where((workspace) {
       final matchesQuery = query.isEmpty ||
           workspace.title.toLowerCase().contains(query) ||
           workspace.category.toLowerCase().contains(query);
@@ -38,6 +42,7 @@ class _WorkspaceListScreenState extends State<WorkspaceListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    context.watch<WorkspaceCubit>();
     final workspaces = _filteredWorkspaces;
     final pinnedWorkspaces =
         workspaces.where((workspace) => workspace.hasPin).toList();
@@ -53,7 +58,28 @@ class _WorkspaceListScreenState extends State<WorkspaceListScreen> {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => const CreateJoinWorkspaceScreen(),
+              builder: (_) => CreateJoinWorkspaceScreen(
+                onCreate: (data) async {
+                  await context.read<WorkspaceCubit>().create(
+                        data.name,
+                        data.description,
+                        data.category,
+                        data.pinOnHome,
+                      );
+                  if (context.mounted) Navigator.pop(context);
+                },
+                onJoin: (code) async {
+                  try {
+                    await context.read<WorkspaceCubit>().join(code);
+                    if (context.mounted) Navigator.pop(context);
+                  } catch (error) {
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(error.toString())),
+                    );
+                  }
+                },
+              ),
             ),
           );
         },
@@ -197,119 +223,128 @@ class _WorkspaceListScreenState extends State<WorkspaceListScreen> {
   }
 
   Widget _buildWorkspaceCard(Workspace workspace) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppTheme.background,
-        border: Border.all(color: AppTheme.border),
-        borderRadius: BorderRadius.circular(16),
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => WorkspaceDetailScreen(workspace: workspace),
+        ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: AppTheme.editorToolbarBackground,
-                  borderRadius: BorderRadius.circular(8),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppTheme.background,
+          border: Border.all(color: AppTheme.border),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppTheme.editorToolbarBackground,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    workspace.category,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                      color: AppTheme.textSecondary,
+                    ),
+                  ),
                 ),
-                child: Text(
-                  workspace.category,
+                Icon(
+                  workspace.hasPin ? Icons.push_pin : Icons.push_pin_outlined,
+                  size: 16,
+                  color: workspace.hasPin
+                      ? AppTheme.textPrimary
+                      : AppTheme.textSecondary,
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              workspace.title,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: AppTheme.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                _buildMemberAvatars(workspace.memberInitials),
+                const SizedBox(width: 6),
+                Text(
+                  '${workspace.memberInitials.length} anggota',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppTheme.textSecondary,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            const Divider(height: 1, color: AppTheme.border),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                const Icon(
+                  Icons.description_outlined,
+                  size: 14,
+                  color: AppTheme.textSecondary,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  '${workspace.memoCount} memo',
                   style: const TextStyle(
                     fontSize: 11,
-                    fontWeight: FontWeight.w500,
                     color: AppTheme.textSecondary,
                   ),
                 ),
-              ),
-              Icon(
-                workspace.hasPin ? Icons.push_pin : Icons.push_pin_outlined,
-                size: 16,
-                color: workspace.hasPin
-                    ? AppTheme.textPrimary
-                    : AppTheme.textSecondary,
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(
-            workspace.title,
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: AppTheme.textPrimary,
+                const SizedBox(width: 8),
+                const Text(
+                  '•',
+                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 11),
+                ),
+                const SizedBox(width: 8),
+                const Icon(
+                  Icons.folder_open_outlined,
+                  size: 14,
+                  color: AppTheme.textSecondary,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  '${workspace.fileCount} berkas',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: AppTheme.textSecondary,
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  DateFormatter.getRelativeTimeText(workspace.updatedAt),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.end,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: AppTheme.textSecondary,
+                  ),
+                ),
+              ],
             ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              _buildMemberAvatars(workspace.memberInitials),
-              const SizedBox(width: 6),
-              Text(
-                '${workspace.memberInitials.length} anggota',
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: AppTheme.textSecondary,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          const Divider(height: 1, color: AppTheme.border),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              const Icon(
-                Icons.description_outlined,
-                size: 14,
-                color: AppTheme.textSecondary,
-              ),
-              const SizedBox(width: 4),
-              Text(
-                '${workspace.memoCount} memo',
-                style: const TextStyle(
-                  fontSize: 11,
-                  color: AppTheme.textSecondary,
-                ),
-              ),
-              const SizedBox(width: 8),
-              const Text(
-                '•',
-                style: TextStyle(color: AppTheme.textSecondary, fontSize: 11),
-              ),
-              const SizedBox(width: 8),
-              const Icon(
-                Icons.folder_open_outlined,
-                size: 14,
-                color: AppTheme.textSecondary,
-              ),
-              const SizedBox(width: 4),
-              Text(
-                '${workspace.fileCount} berkas',
-                style: const TextStyle(
-                  fontSize: 11,
-                  color: AppTheme.textSecondary,
-                ),
-              ),
-              const Spacer(),
-              Text(
-                workspace.time,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.end,
-                style: const TextStyle(
-                  fontSize: 11,
-                  color: AppTheme.textSecondary,
-                ),
-              ),
-            ],
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

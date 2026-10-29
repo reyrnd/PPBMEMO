@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class Comment {
   final String id;
   final String memoId;
@@ -36,6 +38,29 @@ class Comment {
       text: text ?? this.text,
       createdAt: createdAt ?? this.createdAt,
       parentId: parentId ?? this.parentId,
+    );
+  }
+
+  factory Comment.fromDoc(
+      DocumentSnapshot<Map<String, dynamic>> doc, String memoId) {
+    final d = doc.data()!;
+    final name = d['authorName'] as String? ?? '';
+    return Comment(
+      id: doc.id,
+      memoId: memoId,
+      authorName: name,
+      initials: name.isEmpty
+          ? '?'
+          : name
+              .trim()
+              .split(' ')
+              .map((e) => e[0])
+              .take(2)
+              .join()
+              .toUpperCase(),
+      text: d['text'] ?? '',
+      createdAt: (d['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      parentId: d['parentId'],
     );
   }
 }

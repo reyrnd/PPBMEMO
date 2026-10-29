@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:memospace/core/app_theme.dart';
 import 'package:memospace/core/utils/validators.dart';
 
@@ -23,6 +24,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
   var _obscureCurrentPassword = true;
   var _obscureNewPassword = true;
   var _obscureConfirmPassword = true;
+  var _isSaving = false;
 
   @override
   void initState() {
@@ -43,14 +45,61 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
     setState(() {});
   }
 
-  void _save() {
-    if (!_formKey.currentState!.validate()) return;
-    widget.onSave?.call(
-      PasswordChangeData(
-        currentPassword: _currentPasswordController.text,
-        newPassword: _newPasswordController.text,
-      ),
-    );
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate() || _isSaving) return;
+
+    final user = FirebaseAuth.instance.currentUser;
+    final email = user?.email;
+    if (user == null || email == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Silakan masuk kembali untuk mengubah kata sandi.'),
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isSaving = true);
+    try {
+      final credential = EmailAuthProvider.credential(
+        email: email,
+        password: _currentPasswordController.text,
+      );
+      await user.reauthenticateWithCredential(credential);
+      await user.updatePassword(_newPasswordController.text);
+      widget.onSave?.call(
+        PasswordChangeData(
+          currentPassword: _currentPasswordController.text,
+          newPassword: _newPasswordController.text,
+        ),
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Kata sandi berhasil diubah.')),
+      );
+    } on FirebaseAuthException catch (error) {
+      if (!mounted) return;
+      final message = switch (error.code) {
+        'wrong-password' ||
+        'invalid-credential' =>
+          'Kata sandi lama yang dimasukkan salah.',
+        'weak-password' => 'Kata sandi baru terlalu lemah.',
+        'requires-recent-login' =>
+          'Silakan masuk kembali sebelum mengubah kata sandi.',
+        _ => 'Kata sandi gagal diubah. Silakan coba lagi.',
+      };
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Kata sandi gagal diubah. Silakan coba lagi.'),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 
   @override
@@ -223,7 +272,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
               child: Column(
                 children: [
                   ElevatedButton(
-                    onPressed: _save,
+                    onPressed: _isSaving ? null : _save,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppTheme.textPrimary,
                       foregroundColor: Colors.white,
@@ -231,20 +280,29 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                       shape: const StadiumBorder(),
                       elevation: 0,
                     ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: const [
-                        Text(
-                          'Simpan kata sandi baru',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
+                    child: _isSaving
+                        ? const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: const [
+                              Text(
+                                'Simpan kata sandi baru',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              SizedBox(width: 8),
+                              Icon(Icons.arrow_forward, size: 18),
+                            ],
                           ),
-                        ),
-                        SizedBox(width: 8),
-                        Icon(Icons.arrow_forward, size: 18),
-                      ],
-                    ),
                   ),
                   const SizedBox(height: 14),
                   Row(

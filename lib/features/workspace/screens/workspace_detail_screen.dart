@@ -1,21 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:memospace/core/app_theme.dart';
+import 'package:memospace/core/utils/date_formatter.dart';
 import 'package:memospace/core/widgets/avatar_stack.dart';
 import 'package:memospace/core/widgets/section_header.dart';
-import 'package:memospace/features/activity/data/dummy_activities.dart';
+import 'package:memospace/features/activity/data/activity_repository.dart';
+import 'package:memospace/features/activity/models/activity.dart';
 import 'package:memospace/features/activity/widgets/activity_row.dart';
-import 'package:memospace/features/memo/data/dummy_memos.dart';
+import 'package:memospace/features/memo/cubit/memo_cubit.dart';
+import 'package:memospace/features/memo/models/memo.dart';
 import 'package:memospace/features/memo/screens/memo_editor_screen.dart';
+import 'package:memospace/features/workspace/cubit/workspace_cubit.dart';
+import 'package:memospace/features/workspace/models/workspace.dart';
+import 'package:memospace/features/workspace/models/workspace_member.dart';
 import 'package:memospace/features/workspace/board/board_view.dart';
 import 'package:memospace/features/workspace/board/canvas_board.dart';
 import 'package:memospace/features/workspace/board/kanban_board.dart';
-import 'package:memospace/features/workspace/models/workspace_member.dart';
 import 'package:memospace/features/workspace/widgets/invite_sheet.dart';
 import 'package:memospace/features/workspace/widgets/workspace_menu.dart';
 import 'package:memospace/features/workspace/widgets/workspace_stats.dart';
 
 class WorkspaceDetailScreen extends StatefulWidget {
+  final Workspace workspace;
   final bool isPinned;
   final bool isOwner;
   final VoidCallback? onTogglePin;
@@ -25,6 +32,7 @@ class WorkspaceDetailScreen extends StatefulWidget {
 
   const WorkspaceDetailScreen({
     super.key,
+    required this.workspace,
     this.isPinned = false,
     this.isOwner = false,
     this.onTogglePin,
@@ -39,9 +47,46 @@ class WorkspaceDetailScreen extends StatefulWidget {
 
 class _WorkspaceDetailScreenState extends State<WorkspaceDetailScreen> {
   int _tab = 0;
+  late Stream<List<Activity>> _activities;
+
+  @override
+  void initState() {
+    super.initState();
+    _watchActivities();
+  }
+
+  @override
+  void didUpdateWidget(covariant WorkspaceDetailScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.workspace.id != widget.workspace.id ||
+        oldWidget.workspace.title != widget.workspace.title) {
+      _watchActivities();
+    }
+  }
+
+  void _watchActivities() {
+    _activities = ActivityRepository().watchWorkspaceActivities(
+      workspaceId: widget.workspace.id,
+      workspaceName: widget.workspace.title,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
+    final workspaceMatches = context
+        .watch<WorkspaceCubit>()
+        .state
+        .where((item) => item.id == widget.workspace.id)
+        .toList();
+    final workspace =
+        workspaceMatches.isEmpty ? widget.workspace : workspaceMatches.first;
+    final memos = context
+        .watch<MemoCubit>()
+        .state
+        .where((memo) => memo.workspaceId == workspace.id)
+        .toList();
+    final latestMemos = memos.take(3).toList();
+
     return Scaffold(
       backgroundColor: AppTheme.background,
       // --- 1. APP BAR ---
@@ -67,7 +112,10 @@ class _WorkspaceDetailScreenState extends State<WorkspaceDetailScreen> {
           WorkspaceMenu(
             isPinned: widget.isPinned,
             isOwner: widget.isOwner,
-            onTogglePin: widget.onTogglePin,
+            onTogglePin: widget.onTogglePin ??
+                () => context
+                    .read<WorkspaceCubit>()
+                    .togglePin(widget.workspace.id),
             onRename: widget.onRenameWorkspace,
             onLeave: widget.onLeaveWorkspace,
             onDelete: widget.onDeleteWorkspace,
@@ -109,14 +157,16 @@ class _WorkspaceDetailScreenState extends State<WorkspaceDetailScreen> {
                           borderRadius: BorderRadius.circular(20),
                           border: Border.all(color: AppTheme.border),
                         ),
-                        child: const Row(
+                        child: Row(
                           children: [
-                            Icon(Icons.bookmark_border_outlined,
+                            const Icon(Icons.bookmark_border_outlined,
                                 size: 14, color: AppTheme.textPrimary),
-                            SizedBox(width: 4),
+                            const SizedBox(width: 4),
                             Text(
-                              'Robotika & Elektro',
-                              style: TextStyle(
+                              workspace.category.isEmpty
+                                  ? 'Workspace'
+                                  : workspace.category,
+                              style: const TextStyle(
                                 fontSize: 12,
                                 color: AppTheme.textPrimary,
                                 fontWeight: FontWeight.w500,
@@ -140,8 +190,8 @@ class _WorkspaceDetailScreenState extends State<WorkspaceDetailScreen> {
                   ),
                   const SizedBox(height: 16),
                   // Judul Workspace
-                  const Text(
-                    'Proyek Robot AUV',
+                  Text(
+                    workspace.title,
                     style: TextStyle(
                       fontSize: 26,
                       fontWeight: FontWeight.bold,
@@ -150,63 +200,29 @@ class _WorkspaceDetailScreenState extends State<WorkspaceDetailScreen> {
                     ),
                   ),
                   const SizedBox(height: 6),
-                  const Text(
-                    'Tempat kolaborasi dan dokumentasi teknis tim robot bawah air mandiri.',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: AppTheme.textSecondary,
-                      height: 1.4,
+                  if (workspace.description.isNotEmpty)
+                    Text(
+                      workspace.description,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: AppTheme.textSecondary,
+                        height: 1.4,
+                      ),
                     ),
-                  ),
                   const SizedBox(height: 16),
                   // Anggota Tim & Tombol Undang
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      _buildAvatarGroup(),
+                      _buildAvatarGroup(workspace.members),
                       OutlinedButton(
                         onPressed: () => showInviteSheet(
                           context: context,
-                          inviteCode: '123456',
-                          members: const [
-                            WorkspaceMember(
-                              userId: 'auv-dina',
-                              name: 'Dina Novita',
-                              initials: 'DN',
-                              role: MemberRole.owner,
-                            ),
-                            WorkspaceMember(
-                              userId: 'auv-budi',
-                              name: 'Budi Santoso',
-                              initials: 'BS',
-                              role: MemberRole.member,
-                            ),
-                            WorkspaceMember(
-                              userId: 'auv-andi',
-                              name: 'Andi Firmansyah',
-                              initials: 'AF',
-                              role: MemberRole.member,
-                            ),
-                            WorkspaceMember(
-                              userId: 'auv-rani',
-                              name: 'Rani Nurdin',
-                              initials: 'RN',
-                              role: MemberRole.member,
-                            ),
-                            WorkspaceMember(
-                              userId: 'auv-miko',
-                              name: 'Miko Kurniawan',
-                              initials: 'MK',
-                              role: MemberRole.member,
-                            ),
-                            WorkspaceMember(
-                              userId: 'auv-farhan',
-                              name: 'Farhan Kurniawan',
-                              initials: 'FK',
-                              role: MemberRole.member,
-                            ),
-                          ],
-                          onSendInvite: (email) async {},
+                          inviteCode: workspace.inviteCode,
+                          members: workspace.members,
+                          onSendInvite: (email) => context
+                              .read<WorkspaceCubit>()
+                              .inviteByEmail(workspace.id, email),
                           onShareInvite: (inviteCode) async {
                             await Clipboard.setData(
                               ClipboardData(text: inviteCode),
@@ -238,10 +254,10 @@ class _WorkspaceDetailScreenState extends State<WorkspaceDetailScreen> {
               const SizedBox(height: 16),
 
               // --- 3. METRICS CARDS ROW ---
-              const WorkspaceStats(
-                activeMemoCount: '18',
-                fileCount: '6',
-                memberCount: '6',
+              WorkspaceStats(
+                activeMemoCount: '${memos.length}',
+                fileCount: '${workspace.fileCount}',
+                memberCount: '${workspace.members.length}',
               ),
 
               const SizedBox(height: 20),
@@ -254,7 +270,9 @@ class _WorkspaceDetailScreenState extends State<WorkspaceDetailScreen> {
                       onPressed: () => Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => const MemoEditorScreen(),
+                          builder: (_) => MemoEditorScreen(
+                            workspaceId: widget.workspace.id,
+                          ),
                         ),
                       ),
                       style: ElevatedButton.styleFrom(
@@ -318,87 +336,85 @@ class _WorkspaceDetailScreenState extends State<WorkspaceDetailScreen> {
               const SizedBox(height: 24),
 
               if (_tab == 0) ...[
-                // SectionHeader "Memo Terbaru" + tiga _buildMemoItem(...) yang sudah ada
-                // --- 6. SECTION HEADER: MEMO TERBARU ---
                 SectionHeader(
                   title: 'Memo Terbaru',
-                  badge: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: AppTheme.editorToolbarBackground,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Text(
-                      '18',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: AppTheme.textSecondary,
-                        fontWeight: FontWeight.bold,
-                      ),
+                  badge: Text(
+                    '${memos.length}',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppTheme.textSecondary,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
-                  actionLabel: 'Urutkan',
-                  onAction: () {},
                 ),
                 const SizedBox(height: 12),
-                // KARTU MEMO 1 (Pinned / Disematkan)
-                _buildMemoItem(
-                  isPinned: true,
-                  timeAgo: '1 jam lalu',
-                  title: 'Catatan Rapat Tim: Pembagian Modul',
-                  description:
-                      'Pembagian tugas pengerjaan subsistem sonar, kontrol PID propulsi, dan integrasi ROS 2 Humble...',
-                  hasAttachment: true,
-                  attachmentName: 'Notulensi_Sprint_AUV_v1.pdf',
-                  attachmentSize: '1.2 MB',
-                  userInitials: 'DN',
-                  userName: 'Dina Novita',
-                  commentsCount: 4,
-                ),
-                // KARTU MEMO 2 (Dengan Hashtags)
-                _buildMemoItem(
-                  isPinned: false,
-                  timeAgo: 'Kemarin',
-                  title: 'Hasil Uji Baterai LiPo 4S 5000mAh',
-                  description:
-                      'Penurunan tegangan pada beban 4 thruster maksimal 14.2V setelah 25 menit pengujian...',
-                  tags: ['#Baterai', '#Hardware'],
-                  userInitials: 'BS',
-                  userName: 'Budi Santoso',
-                  commentsCount: 2,
-                ),
-                // KARTU MEMO 3 (Dengan Progress Bar)
-                _buildMemoItem(
-                  isPinned: false,
-                  timeAgo: '3 hari lalu',
-                  title: 'Daftar Komponen Cadangan Kontes AUV',
-                  description:
-                      'Sensor cadangan IMU BNO055 dan thruster T200 telah masuk inventaris lab, menunggu pengiriman',
-                  tags: ['#Logistik', '#Kontes'],
-                  progressText: '8/10 terkumpul',
-                  progressValue: 0.8,
-                  userInitials: 'FK',
-                  userName: 'Farhan Kurniawan',
-                  commentsCount: 7,
-                ),
+                if (latestMemos.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 20),
+                    child: Text(
+                      'Belum ada memo di workspace ini.',
+                      style: TextStyle(color: AppTheme.textSecondary),
+                    ),
+                  )
+                else
+                  for (final memo in latestMemos)
+                    _buildMemoItem(
+                      isPinned: memo.isPinned,
+                      timeAgo:
+                          DateFormatter.getRelativeTimeText(memo.updatedAt),
+                      title: memo.title,
+                      description: memo.content,
+                      userInitials: _initials(memo.authorName),
+                      userName:
+                          memo.authorName.isEmpty ? 'Anggota' : memo.authorName,
+                    ),
                 const SizedBox(height: 16),
               ] else if (_tab == 1)
                 SizedBox(
                   height: MediaQuery.of(context).size.height * 0.6,
                   child: BoardView(
-                    canvasBoard: CanvasBoard(memos: dummyMemos),
-                    kanbanBoard: KanbanBoard(memos: dummyMemos),
+                    canvasBoard: CanvasBoard(memos: memos),
+                    kanbanBoard: KanbanBoard(memos: memos),
                     onAddMemo: () => Navigator.push(
                       context,
                       MaterialPageRoute(
-                          builder: (_) => const MemoEditorScreen()),
+                          builder: (_) => MemoEditorScreen(
+                                workspaceId: widget.workspace.id,
+                              )),
                     ),
                   ),
                 )
-              else ...[
-                for (final a in dummyActivities) ActivityRow(activity: a),
-              ],
+              else
+                StreamBuilder<List<Activity>>(
+                  stream: _activities,
+                  builder: (context, snapshot) {
+                    if (snapshot.hasError) {
+                      return const Text(
+                        'Aktivitas gagal dimuat.',
+                        style: TextStyle(color: AppTheme.textSecondary),
+                      );
+                    }
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    final activities = snapshot.data ?? const <Activity>[];
+                    if (activities.isEmpty) {
+                      return const Text(
+                        'Belum ada aktivitas.',
+                        style: TextStyle(color: AppTheme.textSecondary),
+                      );
+                    }
+                    return Column(
+                      children: [
+                        for (final activity in activities)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 16),
+                            child: ActivityRow(activity: activity),
+                          ),
+                      ],
+                    );
+                  },
+                ),
             ],
           ),
         ),
@@ -407,18 +423,34 @@ class _WorkspaceDetailScreenState extends State<WorkspaceDetailScreen> {
   }
 
 // --- WIDGET HELPERS COMPONENT ---
-  Widget _buildAvatarGroup() {
-    return const Row(
+  Widget _buildAvatarGroup(List<WorkspaceMember> members) {
+    final initials = members
+        .map((member) => member.initials as String)
+        .where((value) => value.isNotEmpty)
+        .take(5)
+        .toList();
+    return Row(
       children: [
-        AvatarStack(['DN', 'BS', 'AF', 'RN', 'MK', 'FK']),
-        SizedBox(width: 8),
-        Text('6 aktif',
-            style: TextStyle(
+        if (initials.isNotEmpty) AvatarStack(initials),
+        if (initials.isNotEmpty) const SizedBox(width: 8),
+        Text('${members.length} anggota',
+            style: const TextStyle(
                 fontSize: 13,
                 color: AppTheme.textSecondary,
                 fontWeight: FontWeight.w500)),
       ],
     );
+  }
+
+  String _initials(String name) {
+    final parts = name
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((part) => part.isNotEmpty)
+        .toList();
+    if (parts.isEmpty) return '?';
+    return (parts.first[0] + (parts.length > 1 ? parts.last[0] : ''))
+        .toUpperCase();
   }
 
   Widget _buildSubTab(String text, int index) {

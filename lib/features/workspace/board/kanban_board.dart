@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:memospace/core/app_theme.dart';
+import 'package:memospace/core/utils/date_formatter.dart';
 import 'package:memospace/features/memo/models/memo.dart';
 
 enum KanbanStatus { planned, inProgress, completed }
@@ -223,7 +224,7 @@ class _KanbanMemoCard extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           Text(
-            '${memo.author} • ${memo.time}',
+            '${memo.authorName} • ${DateFormatter.getRelativeTimeText(memo.updatedAt)}',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:memospace/core/app_theme.dart';
+import 'package:memospace/core/utils/date_formatter.dart';
 import 'package:memospace/core/widgets/avatar_stack.dart';
 import '../models/workspace.dart';
 
@@ -55,7 +56,7 @@ class WorkspaceCard extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               AvatarStack(workspace.memberInitials),
-              Text(workspace.time,
+              Text(DateFormatter.getRelativeTimeText(workspace.updatedAt),
                   style: const TextStyle(fontSize: 10, color: Colors.black38)),
             ],
           )

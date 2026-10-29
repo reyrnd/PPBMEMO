@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:memospace/core/widgets/memo_app_bar.dart';
 import 'package:memospace/features/library/widgets/create_sheet.dart';
 import 'package:memospace/features/library/widgets/filter_sheet.dart';
 import 'package:memospace/features/library/widgets/workspace_picker_sheet.dart';
-import 'package:memospace/features/memo/data/dummy_memos.dart';
+import 'package:memospace/features/memo/cubit/memo_cubit.dart';
+import 'package:memospace/features/memo/models/memo.dart';
+import 'package:memospace/features/workspace/cubit/workspace_cubit.dart';
 import '../../../core/app_theme.dart';
+import '../../../core/utils/date_formatter.dart';
 
 class LibraryScreen extends StatefulWidget {
   const LibraryScreen({super.key});
@@ -15,12 +19,66 @@ class LibraryScreen extends StatefulWidget {
 
 class _LibraryScreenState extends State<LibraryScreen> {
   int _bottomNavIndex = 1;
+
+  final _searchController = TextEditingController();
+  String _query = '';
+  String _jenis = 'Semua';
+  String _urutan = 'Terbaru';
+  bool _termasukArsip = false;
+  String? _workspaceId; // null = semua workspace
   String _currentWorkspace = 'Semua workspace';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  String _jenisOf(Memo m) {
+    final f = m.fileName?.toLowerCase();
+    if (f == null) return 'Teks';
+    if (RegExp(r'\.(jpg|jpeg|png|webp|gif)$').hasMatch(f)) return 'Foto';
+    if (RegExp(r'\.(mp4|mov|mkv|webm)$').hasMatch(f)) return 'Video';
+    return 'Berkas';
+  }
+
+  List<Memo> _applyFilters(List<Memo> all) {
+    var list = all.where((m) {
+      if (_workspaceId != null && m.workspaceId != _workspaceId) return false;
+      if (_jenis != 'Semua' && _jenisOf(m) != _jenis) return false;
+      if (!_termasukArsip && m.isArchived) return false;
+      if (_query.isNotEmpty) {
+        final q = _query.toLowerCase();
+        if (!m.title.toLowerCase().contains(q) &&
+            !m.content.toLowerCase().contains(q)) return false;
+      }
+      return true;
+    }).toList();
+
+    if (_urutan == 'Terlama') list = list.reversed.toList();
+    if (_urutan == 'Judul A-Z') {
+      list.sort(
+          (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+    }
+    return list;
+  }
 
   bool _isGridView = false;
 
   @override
   Widget build(BuildContext context) {
+    final memos = _applyFilters(context.watch<MemoCubit>().state);
+    final workspaces = context.watch<WorkspaceCubit>().state;
+    final selectedWorkspaceIds = workspaces
+        .where((workspace) => workspace.title == _currentWorkspace)
+        .map((workspace) => workspace.id)
+        .toSet();
+    final visibleMemos = _currentWorkspace == 'Semua workspace'
+        ? memos
+        : memos
+            .where((memo) => selectedWorkspaceIds.contains(memo.workspaceId))
+            .toList();
+
     return Scaffold(
       backgroundColor: AppTheme.background,
 
@@ -97,16 +155,17 @@ class _LibraryScreenState extends State<LibraryScreen> {
                       );
 
                       if (dataFilter != null) {
-                        // Data filter yang dipilih user berhasil didapatkan di sini!
-                        print("Jenis: ${dataFilter['jenis']}");
-                        print("Urutan: ${dataFilter['urutan']}");
-                        print("Termasuk Arsip: ${dataFilter['termasukArsip']}");
-
-                        // Anda bisa melakukan setState() di sini untuk memperbarui list library berdasarkan filter
+                        setState(() {
+                          _jenis = dataFilter['jenis'];
+                          _urutan = dataFilter['urutan'];
+                          _termasukArsip = dataFilter['termasukArsip'];
+                        });
                       }
                     },
                   ),
                 ),
+                controller: _searchController,
+                onChanged: (v) => setState(() => _query = v),
               ),
               const SizedBox(height: 20),
 
@@ -116,19 +175,22 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 children: [
                   InkWell(
                     onTap: () async {
-                      // Tampilkan Picker Sheet
-                      final selected = await showModalBottomSheet<String>(
+                      final workspaces = context.read<WorkspaceCubit>().state;
+                      final selected =
+                          await showModalBottomSheet<Map<String, dynamic>>(
                         context: context,
                         backgroundColor: Colors.transparent,
                         isScrollControlled: true,
-                        builder: (context) => WorkspacePickerSheet(
-                          activeWorkspace: _currentWorkspace,
+                        builder: (_) => WorkspacePickerSheet(
+                          workspaces: workspaces,
+                          activeWorkspaceId: _workspaceId,
                         ),
                       );
 
                       if (selected != null) {
                         setState(() {
-                          _currentWorkspace = selected;
+                          _workspaceId = selected['id'];
+                          _currentWorkspace = selected['title'];
                         });
                       }
                     },
@@ -154,9 +216,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
                   ),
                   Row(
                     children: [
-                      const Text(
-                        '14 memo',
-                        style: TextStyle(
+                      Text(
+                        '${visibleMemos.length} memo',
+                        style: const TextStyle(
                             fontSize: 13, color: AppTheme.textSecondary),
                       ),
                       const SizedBox(width: 14),
@@ -207,12 +269,12 @@ class _LibraryScreenState extends State<LibraryScreen> {
                   shrinkWrap: true,
                   physics:
                       const NeverScrollableScrollPhysics(), // Scroll mengikuti SingleChildScrollView luar
-                  itemCount: dummyMemos.length,
+                  itemCount: visibleMemos.length,
                   itemBuilder: (context, index) {
-                    final memo = dummyMemos[index];
+                    final memo = visibleMemos[index];
 
                     // Membuat inisial user secara otomatis (contoh: Dimas A. -> DA)
-                    final words = memo.author.split(' ');
+                    final words = memo.authorName.split(' ');
                     final initials = words
                         .map((w) => w.isNotEmpty ? w[0] : '')
                         .join()
@@ -228,8 +290,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
                       userInitials: initials.length > 2
                           ? initials.substring(0, 2)
                           : initials,
-                      userName: memo.author,
-                      timeAgo: memo.time,
+                      userName: memo.authorName,
+                      timeAgo:
+                          DateFormatter.getRelativeTimeText(memo.updatedAt),
                       isBookmarked: memo.isBookmarked,
                       // Lampiran dinamis jika ada property fileName
                       attachmentWidget: memo.fileName != null
@@ -243,7 +306,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 GridView.builder(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
-                  itemCount: dummyMemos.length,
+                  itemCount: visibleMemos.length,
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 2,
                     crossAxisSpacing: 12,
@@ -252,12 +315,13 @@ class _LibraryScreenState extends State<LibraryScreen> {
                         0.85, // Sesuaikan rasio agar tidak luapan/overflow
                   ),
                   itemBuilder: (context, index) {
-                    final memo = dummyMemos[index];
+                    final memo = visibleMemos[index];
                     return _buildGridLibraryCard(
                       category: memo.category,
                       title: memo.title,
                       description: memo.content,
-                      timeAgo: memo.time,
+                      timeAgo:
+                          DateFormatter.getRelativeTimeText(memo.updatedAt),
                     );
                   },
                 ),

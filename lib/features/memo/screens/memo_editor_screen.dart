@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:memospace/features/memo/cubit/memo_cubit.dart';
 import 'package:memospace/features/memo/models/comment.dart';
 import 'package:memospace/features/memo/models/memo.dart';
 import 'package:memospace/features/memo/widgets/comments_sheet.dart';
 import 'package:memospace/features/memo/widgets/editor_toolbar.dart';
+import 'package:memospace/features/workspace/cubit/workspace_cubit.dart';
 import '../../../core/app_theme.dart';
 
 class MemoEditorScreen extends StatefulWidget {
-  const MemoEditorScreen({super.key});
+  final String workspaceId;
+
+  const MemoEditorScreen({super.key, required this.workspaceId});
 
   @override
   State<MemoEditorScreen> createState() => _MemoEditorScreenState();
@@ -45,7 +50,7 @@ class _MemoEditorScreenState extends State<MemoEditorScreen> {
     );
   }
 
-  void _saveMemo() {
+  Future<void> _saveMemo() async {
     final title = _titleController.text.trim();
     final content = _contentController.text.trim();
     if (title.isEmpty && content.isEmpty) {
@@ -57,22 +62,37 @@ class _MemoEditorScreenState extends State<MemoEditorScreen> {
       return;
     }
 
-    Navigator.pop(
-      context,
-      Memo(
-        id: 'memo-${DateTime.now().microsecondsSinceEpoch}',
-        category: 'Proyek Robot AUV',
-        title: title.isEmpty ? 'Memo tanpa judul' : title,
-        content: content,
-        author: 'Saya',
-        time: 'Baru saja',
-        isPinned: false,
-      ),
+    final now = DateTime.now();
+    final memo = Memo(
+      id: '',
+      workspaceId: widget.workspaceId,
+      title: title.isEmpty ? 'Memo tanpa judul' : title,
+      content: content,
+      authorName: 'Saya',
+      updatedAt: now,
     );
+
+    try {
+      await context.read<MemoCubit>().save(memo, isNew: true);
+      if (!mounted) return;
+      Navigator.pop(context);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Memo gagal disimpan: $error')),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final workspaces = context.watch<WorkspaceCubit>().state;
+    final matchingWorkspaces =
+        workspaces.where((workspace) => workspace.id == widget.workspaceId);
+    final workspaceTitle = matchingWorkspaces.isEmpty
+        ? 'Workspace'
+        : matchingWorkspaces.first.title;
+
     return Scaffold(
       backgroundColor: AppTheme.background,
       // --- 1. APP BAR UTAMA ---
@@ -92,16 +112,6 @@ class _MemoEditorScreenState extends State<MemoEditorScreen> {
             fontSize: 18,
           ),
         ),
-        actions: const [
-          Padding(
-            padding: EdgeInsets.only(right: 16),
-            child: CircleAvatar(
-              radius: 16,
-              backgroundColor: AppTheme.textPrimary,
-              child: Icon(Icons.person, color: Colors.white, size: 18),
-            ),
-          ),
-        ],
       ),
       body: SafeArea(
         child: Column(
@@ -204,19 +214,19 @@ class _MemoEditorScreenState extends State<MemoEditorScreen> {
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(color: const Color(0xFFE5E7EB)),
                       ),
-                      child: const Row(
+                      child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.folder_open,
+                          const Icon(Icons.folder_open,
                               size: 14, color: AppTheme.textSecondary),
-                          SizedBox(width: 6),
-                          Text('Proyek Robot AUV',
-                              style: TextStyle(
+                          const SizedBox(width: 6),
+                          Text(workspaceTitle,
+                              style: const TextStyle(
                                   fontSize: 12,
                                   color: AppTheme.textPrimary,
                                   fontWeight: FontWeight.w500)),
-                          SizedBox(width: 4),
-                          Icon(Icons.keyboard_arrow_down,
+                          const SizedBox(width: 4),
+                          const Icon(Icons.keyboard_arrow_down,
                               size: 14, color: AppTheme.textSecondary),
                         ],
                       ),

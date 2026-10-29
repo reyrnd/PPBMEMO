@@ -1,6 +1,8 @@
 // create_sheet.dart
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:memospace/features/memo/screens/memo_editor_screen.dart';
+import 'package:memospace/features/workspace/cubit/workspace_cubit.dart';
 
 class CreateSheet extends StatelessWidget {
   const CreateSheet({super.key});
@@ -48,11 +50,26 @@ class CreateSheet extends StatelessWidget {
             title: 'Catatan',
             subtitle: 'Tulis memo teks',
             onTap: () {
-              final navigator = Navigator.of(context);
-              navigator.pop(); // tutup sheet
-              navigator.push(
-                MaterialPageRoute(builder: (_) => const MemoEditorScreen()),
-              );
+              final workspaces = context.read<WorkspaceCubit>().state;
+              if (workspaces.isEmpty) {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content:
+                        Text('Buat atau gabung workspace terlebih dahulu.'),
+                  ),
+                );
+                return;
+              }
+
+              Navigator.of(context)
+                ..pop()
+                ..push(
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        MemoEditorScreen(workspaceId: workspaces.first.id),
+                  ),
+                );
             },
           ),
           _buildMenuItem(
