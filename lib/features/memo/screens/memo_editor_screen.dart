@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:memospace/features/memo/data/comment_repository.dart';
 import 'package:memospace/features/memo/cubit/memo_cubit.dart';
 import 'package:memospace/features/memo/models/comment.dart';
 import 'package:memospace/features/memo/models/memo.dart';
@@ -10,8 +12,9 @@ import '../../../core/app_theme.dart';
 
 class MemoEditorScreen extends StatefulWidget {
   final String workspaceId;
+  final Memo? memo;
 
-  const MemoEditorScreen({super.key, required this.workspaceId});
+  const MemoEditorScreen({super.key, required this.workspaceId, this.memo});
 
   @override
   State<MemoEditorScreen> createState() => _MemoEditorScreenState();
@@ -20,7 +23,22 @@ class MemoEditorScreen extends StatefulWidget {
 class _MemoEditorScreenState extends State<MemoEditorScreen> {
   final _titleController = TextEditingController();
   final _contentController = TextEditingController();
-  final List<Comment> _comments = [];
+  final _commentRepository = CommentRepository();
+  late final Stream<List<Comment>> _commentsStream;
+
+  bool get _canEdit =>
+      widget.memo == null ||
+      widget.memo!.authorId == FirebaseAuth.instance.currentUser?.uid;
+
+  @override
+  void initState() {
+    super.initState();
+    _titleController.text = widget.memo?.title ?? '';
+    _contentController.text = widget.memo?.content ?? '';
+    _commentsStream = widget.memo == null
+        ? Stream.value(const <Comment>[])
+        : _commentRepository.watch(widget.workspaceId, widget.memo!.id);
+  }
 
   @override
   void dispose() {
@@ -30,27 +48,26 @@ class _MemoEditorScreenState extends State<MemoEditorScreen> {
   }
 
   void _openComments() {
+    final memo = widget.memo;
+    if (memo == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Simpan memo terlebih dahulu untuk berkomentar.')),
+      );
+      return;
+    }
+
     showCommentsSheet(
       context: context,
-      comments: List.unmodifiable(_comments),
-      onSend: (text) {
-        setState(() {
-          _comments.add(
-            Comment(
-              id: 'comment-${DateTime.now().microsecondsSinceEpoch}',
-              memoId: 'new-memo',
-              authorName: 'Saya',
-              initials: 'SY',
-              text: text,
-              createdAt: DateTime.now(),
-            ),
-          );
-        });
-      },
+      comments: _commentRepository.watch(widget.workspaceId, memo.id),
+      onSend: (text) => _commentRepository.add(
+          widget.workspaceId, memo.id, _titleController.text.trim(), text),
     );
   }
 
   Future<void> _saveMemo() async {
+    if (!_canEdit) return;
+
     final title = _titleController.text.trim();
     final content = _contentController.text.trim();
     if (title.isEmpty && content.isEmpty) {
@@ -64,16 +81,17 @@ class _MemoEditorScreenState extends State<MemoEditorScreen> {
 
     final now = DateTime.now();
     final memo = Memo(
-      id: '',
+      id: widget.memo?.id ?? '',
       workspaceId: widget.workspaceId,
       title: title.isEmpty ? 'Memo tanpa judul' : title,
       content: content,
-      authorName: 'Saya',
+      authorId: widget.memo?.authorId ?? '',
+      authorName: widget.memo?.authorName ?? 'Saya',
       updatedAt: now,
     );
 
     try {
-      await context.read<MemoCubit>().save(memo, isNew: true);
+      await context.read<MemoCubit>().save(memo, isNew: widget.memo == null);
       if (!mounted) return;
       Navigator.pop(context);
     } catch (error) {
@@ -157,46 +175,57 @@ class _MemoEditorScreenState extends State<MemoEditorScreen> {
                         ),
                         Row(
                           children: [
-                            IconButton(
-                              tooltip: 'Buka komentar',
-                              onPressed: _openComments,
-                              icon: Stack(
-                                clipBehavior: Clip.none,
-                                children: [
-                                  const Icon(
-                                    Icons.chat_bubble_outline,
-                                    color: AppTheme.textPrimary,
-                                    size: 22,
-                                  ),
-                                  if (_comments.isNotEmpty)
-                                    Positioned(
-                                      right: -6,
-                                      top: -6,
-                                      child: Container(
-                                        padding: const EdgeInsets.all(2),
-                                        decoration: const BoxDecoration(
-                                          color: AppTheme.primary,
-                                          shape: BoxShape.circle,
-                                        ),
-                                        constraints: const BoxConstraints(
-                                          minWidth: 14,
-                                          minHeight: 14,
-                                        ),
-                                        child: Text(
-                                          '${_comments.length}',
-                                          style: const TextStyle(
-                                            color: AppTheme.background,
-                                            fontSize: 8,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                          textAlign: TextAlign.center,
-                                        ),
-                                      ),
+                            if (widget.memo != null) ...[
+                              IconButton(
+                                tooltip: 'Buka komentar',
+                                onPressed: _openComments,
+                                icon: Stack(
+                                  clipBehavior: Clip.none,
+                                  children: [
+                                    const Icon(
+                                      Icons.chat_bubble_outline,
+                                      color: AppTheme.textPrimary,
+                                      size: 22,
                                     ),
-                                ],
+                                    StreamBuilder<List<Comment>>(
+                                      stream: _commentsStream,
+                                      builder: (context, snapshot) {
+                                        final count =
+                                            snapshot.data?.length ?? 0;
+                                        if (count == 0) {
+                                          return const SizedBox.shrink();
+                                        }
+                                        return Positioned(
+                                          right: -6,
+                                          top: -6,
+                                          child: Container(
+                                            padding: const EdgeInsets.all(2),
+                                            decoration: const BoxDecoration(
+                                              color: AppTheme.primary,
+                                              shape: BoxShape.circle,
+                                            ),
+                                            constraints: const BoxConstraints(
+                                              minWidth: 14,
+                                              minHeight: 14,
+                                            ),
+                                            child: Text(
+                                              '$count',
+                                              style: const TextStyle(
+                                                color: AppTheme.background,
+                                                fontSize: 8,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                              textAlign: TextAlign.center,
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ),
-                            const SizedBox(width: 8),
+                              const SizedBox(width: 8),
+                            ],
                             const Icon(Icons.more_vert,
                                 color: AppTheme.textPrimary, size: 22),
                           ],
@@ -236,6 +265,7 @@ class _MemoEditorScreenState extends State<MemoEditorScreen> {
                     // --- 4. JUDUL & SUBTITLE EDITOR ---
                     TextField(
                       controller: _titleController,
+                      readOnly: !_canEdit,
                       textCapitalization: TextCapitalization.sentences,
                       style: const TextStyle(
                         fontSize: 26,
@@ -260,6 +290,7 @@ class _MemoEditorScreenState extends State<MemoEditorScreen> {
                     // --- 5. ISI CATATAN TEKS ---
                     TextField(
                       controller: _contentController,
+                      readOnly: !_canEdit,
                       minLines: 12,
                       maxLines: null,
                       keyboardType: TextInputType.multiline,
@@ -282,13 +313,14 @@ class _MemoEditorScreenState extends State<MemoEditorScreen> {
             ),
 
             // --- 8. BOTTOM TOOLBAR (DOCK BOTTOM STICKY) ---
-            EditorToolbar(
-              onPhoto: () {},
-              onVideo: () {},
-              onFile: () {},
-              onChecklist: () {},
-              onSave: _saveMemo,
-            ),
+            if (_canEdit)
+              EditorToolbar(
+                onPhoto: () {},
+                onVideo: () {},
+                onFile: () {},
+                onChecklist: () {},
+                onSave: _saveMemo,
+              ),
           ],
         ),
       ),

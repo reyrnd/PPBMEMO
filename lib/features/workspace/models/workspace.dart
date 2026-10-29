@@ -13,6 +13,7 @@ class Workspace {
   final List<String> memberInitials;
   final String inviteCode;
   final List<WorkspaceMember> members;
+  final String ownerId;
 
   const Workspace({
     required this.id,
@@ -26,6 +27,7 @@ class Workspace {
     this.memberInitials = const [],
     this.inviteCode = '',
     this.members = const [],
+    this.ownerId = '',
   });
 
   Workspace copyWith({
@@ -70,6 +72,7 @@ class Workspace {
       updatedAt: (d['updatedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       memberInitials: List<String>.from(d['memberInitials'] ?? const []),
       inviteCode: d['inviteCode'] ?? '',
+      ownerId: d['ownerId'] ?? '',
       members: (d['members'] as Map<String, dynamic>? ?? {}).entries.map((e) {
         final memberData = Map<String, dynamic>.from(e.value as Map);
         final name = memberData['name'] as String? ?? '';

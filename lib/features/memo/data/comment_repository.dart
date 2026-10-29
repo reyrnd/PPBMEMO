@@ -13,10 +13,17 @@ class CommentRepository {
           .doc(memoId)
           .collection('comments');
 
-  Stream<List<Comment>> watch(String wsId, String memoId) => _col(wsId, memoId)
-      .orderBy('createdAt')
-      .snapshots()
-      .map((s) => s.docs.map((d) => Comment.fromDoc(d, memoId)).toList());
+  Stream<List<Comment>> watch(String wsId, String memoId) =>
+      _col(wsId, memoId).snapshots().map((snapshot) {
+        final comments = snapshot.docs
+            .map((doc) => Comment.fromDoc(doc, memoId))
+            .toList()
+          ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+        return comments;
+      });
+
+  Stream<int> watchCount(String wsId, String memoId) =>
+      _col(wsId, memoId).snapshots().map((snapshot) => snapshot.size);
 
   Future<void> add(String wsId, String memoId, String memoTitle, String text,
       {String? parentId}) async {

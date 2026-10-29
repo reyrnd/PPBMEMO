@@ -6,13 +6,13 @@ import 'package:memospace/features/memo/widgets/comment_tile.dart';
 
 Future<void> showCommentsSheet({
   required BuildContext context,
-  required List<Comment> comments,
-  required ValueChanged<String> onSend,
+  required Stream<List<Comment>> comments,
+  required Future<void> Function(String) onSend,
   ValueChanged<Comment>? onReply,
 }) {
   return showAppBottomSheet<void>(
     context: context,
-    title: 'Komentar (${comments.length})',
+    title: 'Komentar',
     heightFactor: 0.7,
     child: _CommentsSheetContent(
       comments: comments,
@@ -23,8 +23,8 @@ Future<void> showCommentsSheet({
 }
 
 class _CommentsSheetContent extends StatefulWidget {
-  final List<Comment> comments;
-  final ValueChanged<String> onSend;
+  final Stream<List<Comment>> comments;
+  final Future<void> Function(String) onSend;
   final ValueChanged<Comment>? onReply;
 
   const _CommentsSheetContent({
@@ -39,6 +39,7 @@ class _CommentsSheetContent extends StatefulWidget {
 
 class _CommentsSheetContentState extends State<_CommentsSheetContent> {
   final _controller = TextEditingController();
+  bool _isSending = false;
 
   @override
   void dispose() {
@@ -46,12 +47,23 @@ class _CommentsSheetContentState extends State<_CommentsSheetContent> {
     super.dispose();
   }
 
-  void _send() {
+  Future<void> _send() async {
     final text = _controller.text.trim();
-    if (text.isEmpty) return;
+    if (text.isEmpty || _isSending) return;
 
-    widget.onSend(text);
-    _controller.clear();
+    setState(() => _isSending = true);
+    try {
+      await widget.onSend(text);
+      _controller.clear();
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Komentar gagal dikirim.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSending = false);
+    }
   }
 
   @override
@@ -59,28 +71,46 @@ class _CommentsSheetContentState extends State<_CommentsSheetContent> {
     return Column(
       children: [
         Expanded(
-          child: widget.comments.isEmpty
-              ? const Center(
+          child: StreamBuilder<List<Comment>>(
+            stream: widget.comments,
+            builder: (context, snapshot) {
+              if (snapshot.hasError) {
+                return const Center(
+                  child: Text(
+                    'Komentar gagal dimuat.',
+                    style: TextStyle(color: AppTheme.textSecondary),
+                  ),
+                );
+              }
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              final comments = snapshot.data ?? const <Comment>[];
+              if (comments.isEmpty) {
+                return const Center(
                   child: Text(
                     'Belum ada komentar.',
                     style: TextStyle(color: AppTheme.textSecondary),
                   ),
-                )
-              : ListView.separated(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  itemCount: widget.comments.length,
-                  separatorBuilder: (context, index) =>
-                      const SizedBox(height: 12),
-                  itemBuilder: (context, index) {
-                    final comment = widget.comments[index];
-                    return CommentTile(
-                      comment: comment,
-                      onReply: widget.onReply == null
-                          ? null
-                          : () => widget.onReply!(comment),
-                    );
-                  },
-                ),
+                );
+              }
+              return ListView.separated(
+                padding: const EdgeInsets.only(bottom: 12),
+                itemCount: comments.length,
+                separatorBuilder: (context, index) =>
+                    const SizedBox(height: 12),
+                itemBuilder: (context, index) {
+                  final comment = comments[index];
+                  return CommentTile(
+                    comment: comment,
+                    onReply: widget.onReply == null
+                        ? null
+                        : () => widget.onReply!(comment),
+                  );
+                },
+              );
+            },
+          ),
         ),
         const Divider(height: 1, color: AppTheme.border),
         const SizedBox(height: 12),
@@ -119,14 +149,23 @@ class _CommentsSheetContentState extends State<_CommentsSheetContent> {
             const SizedBox(width: 8),
             IconButton.filled(
               tooltip: 'Kirim komentar',
-              onPressed: _send,
+              onPressed: _isSending ? null : _send,
               style: IconButton.styleFrom(
                 backgroundColor: AppTheme.primary,
                 foregroundColor: AppTheme.background,
                 fixedSize: const Size(40, 40),
                 padding: EdgeInsets.zero,
               ),
-              icon: const Icon(Icons.send, size: 18),
+              icon: _isSending
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: AppTheme.background,
+                      ),
+                    )
+                  : const Icon(Icons.send, size: 18),
             ),
           ],
         ),

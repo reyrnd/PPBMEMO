@@ -27,6 +27,10 @@ class AppTheme {
         elevation: 0,
         centerTitle: false,
       ),
+      dialogTheme: const DialogThemeData(
+        backgroundColor: background,
+        surfaceTintColor: background,
+      ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: surface,
@@ -67,11 +71,11 @@ class AppTheme {
 
     return InputDecoration(
       hintText: hint,
-      hintStyle: const TextStyle(color: Colors.black38),
+      hintStyle: const TextStyle(color: textSecondary),
       prefixIcon: prefixIcon,
       suffixIcon: suffixIcon,
       filled: true,
-      fillColor: const Color(0xFFF4F5F7),
+      fillColor: surface,
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       border: border(),
       enabledBorder: border(),

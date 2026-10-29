@@ -5,7 +5,7 @@ import 'package:memospace/features/auth/models/app_user.dart';
 
 class EditProfileScreen extends StatefulWidget {
   final AppUser user;
-  final ValueChanged<AppUser>? onSave;
+  final Future<void> Function(AppUser)? onSave;
   final VoidCallback? onChangePhoto;
 
   const EditProfileScreen({
@@ -27,6 +27,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   // State untuk memantau jumlah karakter bio secara real-time
   int _bioCharacterCount = 0;
+  bool _isSaving = false;
 
   @override
   void initState() {
@@ -51,14 +52,26 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     super.dispose();
   }
 
-  void _saveChanges() {
+  Future<void> _saveChanges() async {
     if (!_formKey.currentState!.validate()) return;
-    widget.onSave?.call(
-      widget.user.copyWith(
-        name: _nameController.text.trim(),
-        bio: _bioController.text.trim(),
-      ),
-    );
+    setState(() => _isSaving = true);
+    try {
+      await widget.onSave?.call(
+        widget.user.copyWith(
+          name: _nameController.text.trim(),
+          bio: _bioController.text.trim(),
+        ),
+      );
+      if (!mounted) return;
+      Navigator.pop(context);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Profil gagal disimpan: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 
   @override
@@ -292,7 +305,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             Padding(
               padding: const EdgeInsets.all(20.0),
               child: ElevatedButton(
-                onPressed: _saveChanges,
+                onPressed: _isSaving ? null : _saveChanges,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppTheme.textPrimary,
                   foregroundColor: Colors.white,
@@ -300,20 +313,29 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   shape: const StadiumBorder(),
                   elevation: 0,
                 ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: const [
-                    Text(
-                      'Simpan perubahan',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
+                child: _isSaving
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            'Simpan perubahan',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          SizedBox(width: 8),
+                          Icon(Icons.check, size: 18),
+                        ],
                       ),
-                    ),
-                    SizedBox(width: 8),
-                    Icon(Icons.check, size: 18),
-                  ],
-                ),
               ),
             ),
           ],

@@ -13,10 +13,16 @@ service cloud.firestore {
     }
 
     match /workspaces/{wsId} {
-      function isMember() {
-        return signedIn() && request.auth.uid in
-          get(/databases/$(database)/documents/workspaces/$(wsId)).data.memberIds;
+      function ws() {
+        return get(/databases/$(database)/documents/workspaces/$(wsId)).data;
       }
+      function isMember() {
+        return signedIn() && request.auth.uid in ws().memberIds;
+      }
+      function isOwner() {
+        return signedIn() && ws().ownerId == request.auth.uid;
+      }
+
       allow read: if signedIn() && request.auth.uid in resource.data.memberIds;
       allow create: if signedIn()
         && request.resource.data.ownerId == request.auth.uid
@@ -29,10 +35,38 @@ service cloud.firestore {
       allow delete: if signedIn() && request.auth.uid == resource.data.ownerId;
 
       match /memos/{memoId} {
-        allow read, write: if isMember();
-        match /comments/{commentId} { allow read, write: if isMember(); }
+        allow read: if isMember();
+
+        allow create: if isMember()
+          && request.resource.data.authorId == request.auth.uid;
+
+        // pembuat boleh mengubah semuanya; anggota lain hanya field kolaborasi
+        allow update: if isMember() && (
+          (resource.data.get('authorId', '') == request.auth.uid
+            && request.resource.data.authorId == request.auth.uid)
+          || request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['bookmarkedBy', 'boardX', 'boardY', 'boardStatus'])
+        );
+
+        // pembuat memo, atau pemilik workspace (saat workspace dihapus)
+        allow delete: if isMember() && (
+          resource.data.get('authorId', '') == request.auth.uid || isOwner()
+        );
+
+        match /comments/{commentId} {
+          allow read: if isMember();
+          allow create: if isMember()
+            && request.resource.data.authorId == request.auth.uid;
+          allow update, delete: if isMember() && (
+            resource.data.get('authorId', '') == request.auth.uid || isOwner()
+          );
+        }
       }
-      match /activities/{activityId} { allow read, create: if isMember(); }
+
+      match /activities/{activityId} {
+        allow read, create: if isMember();
+        allow delete: if isOwner();
+      }
     }
   }
 }

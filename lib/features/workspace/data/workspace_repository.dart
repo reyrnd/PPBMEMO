@@ -127,4 +127,20 @@ class WorkspaceRepository {
       'members.$uid': FieldValue.delete(),
     });
   }
+
+  Future<void> delete(String wsId) async {
+    final ref = _db.collection('workspaces').doc(wsId);
+    // anak dulu: rules membaca workspace, jadi dokumen induk dihapus paling akhir
+    for (final memo in (await ref.collection('memos').get()).docs) {
+      for (final c
+          in (await memo.reference.collection('comments').get()).docs) {
+        await c.reference.delete();
+      }
+      await memo.reference.delete();
+    }
+    for (final a in (await ref.collection('activities').get()).docs) {
+      await a.reference.delete();
+    }
+    await ref.delete();
+  }
 }

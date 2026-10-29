@@ -311,6 +311,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                     MaterialPageRoute(
                                         builder: (_) => MemoEditorScreen(
                                               workspaceId: m.workspaceId,
+                                              memo: m,
                                             )),
                                   ),
                                   child: MemoCard(memo: m),

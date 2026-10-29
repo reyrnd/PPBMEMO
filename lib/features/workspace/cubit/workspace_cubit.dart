@@ -30,4 +30,8 @@ class WorkspaceCubit extends Cubit<List<Workspace>> {
     _sub.cancel();
     return super.close();
   }
+
+  Future<void> rename(String id, String title) => _repo.rename(id, title);
+  Future<void> leave(String id) => _repo.leave(id);
+  Future<void> deleteWorkspace(String id) => _repo.delete(id);
 }

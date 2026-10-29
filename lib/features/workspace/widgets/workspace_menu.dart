@@ -26,15 +26,15 @@ class WorkspaceMenu extends StatelessWidget {
       // Menggunakan ikon tiga titik dalam lingkaran yang serasi dengan desain luar
       icon: Container(
         padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF3F4F6),
+        decoration: const BoxDecoration(
+          color: AppTheme.surface,
           shape: BoxShape.circle,
         ),
         child:
             const Icon(Icons.more_vert, color: AppTheme.textPrimary, size: 22),
       ),
-      color: Colors.white,
-      surfaceTintColor: Colors.white,
+      color: AppTheme.background,
+      surfaceTintColor: AppTheme.background,
       elevation: 6, // Memberikan bayangan halus seperti di gambar referensi
       offset: const Offset(
           0, 52), // Menggeser posisi pop-up tepat di bawah tombol menu

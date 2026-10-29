@@ -6,6 +6,7 @@ class SectionHeader extends StatelessWidget {
   final Widget? badge;
   final String actionLabel;
   final VoidCallback? onAction;
+  final Widget? trailing;
 
   const SectionHeader({
     super.key,
@@ -13,6 +14,7 @@ class SectionHeader extends StatelessWidget {
     this.badge,
     this.actionLabel = 'Lihat semua',
     this.onAction,
+    this.trailing,
   });
 
   @override
@@ -40,7 +42,9 @@ class SectionHeader extends StatelessWidget {
             ],
           ),
         ),
-        if (onAction != null)
+        if (trailing != null)
+          trailing!
+        else if (onAction != null)
           TextButton(
             onPressed: onAction,
             child: Row(

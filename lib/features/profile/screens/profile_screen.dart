@@ -1,6 +1,10 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:memospace/core/app_routes.dart';
 import 'package:memospace/features/auth/models/app_user.dart';
+import 'package:memospace/features/auth/data/user_repository.dart';
+import 'package:memospace/features/memo/cubit/memo_cubit.dart';
 import 'package:memospace/features/notification/screens/notification_settings_screen.dart';
 import 'package:memospace/features/profile/screens/change_password_screen.dart';
 import 'package:memospace/features/profile/screens/edit_profile_screen.dart';
@@ -8,228 +12,267 @@ import 'package:memospace/features/profile/screens/help_screen.dart';
 import 'package:memospace/features/profile/screens/language_screen.dart';
 import 'package:memospace/core/widgets/user_avatar.dart';
 import 'package:memospace/services/auth_service.dart';
+import 'package:memospace/features/workspace/cubit/workspace_cubit.dart';
 import '../../../core/app_theme.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
-  static const _user = AppUser(
-    id: 'user-dimas',
-    name: 'Dimas A.',
-    email: 'dimas@student.example.ac.id',
-  );
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  late final Stream<AppUser?> _userStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _userStream = UserRepository().watchMe();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      // --- 1. APP BAR ---
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppTheme.textPrimary),
-          onPressed: () {
-            Navigator.pop(context);
-          },
-        ),
-        title: const Text(
-          'Profil',
-          style: TextStyle(
-            color: AppTheme.textPrimary,
-            fontWeight: FontWeight.bold,
-            fontSize: 22,
+    final authUser = FirebaseAuth.instance.currentUser;
+    final workspaceCount = context.watch<WorkspaceCubit>().state.length;
+    final memoCount = context.watch<MemoCubit>().state.length;
+
+    return StreamBuilder<AppUser?>(
+      stream: _userStream,
+      builder: (context, snapshot) {
+        final storedUser = snapshot.data;
+        final user = AppUser(
+          id: storedUser?.id ?? authUser?.uid ?? '',
+          name: storedUser?.name.trim().isNotEmpty == true
+              ? storedUser!.name
+              : authUser?.displayName ?? 'Pengguna',
+          email: storedUser?.email.trim().isNotEmpty == true
+              ? storedUser!.email
+              : authUser?.email ?? '',
+          bio: storedUser?.bio,
+        );
+
+        return Scaffold(
+          backgroundColor: Colors.white,
+          // --- 1. APP BAR ---
+          appBar: AppBar(
+            backgroundColor: Colors.white,
+            elevation: 0,
+            scrolledUnderElevation: 0,
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back, color: AppTheme.textPrimary),
+              onPressed: () {
+                Navigator.pop(context);
+              },
+            ),
+            title: const Text(
+              'Profil',
+              style: TextStyle(
+                color: AppTheme.textPrimary,
+                fontWeight: FontWeight.bold,
+                fontSize: 22,
+              ),
+            ),
+            // DIUBAH: Properti actions dihapus sepenuhnya di sini untuk menghilangkan tombol avatar redundan
           ),
-        ),
-        // DIUBAH: Properti actions dihapus sepenuhnya di sini untuk menghilangkan tombol avatar redundan
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              const SizedBox(height: 16),
-
-              // --- 2. FOTO PROFIL DENGAN BADGE VERIFIKASI ---
-              Stack(
+          body: SafeArea(
+            child: SingleChildScrollView(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  const UserAvatar('DA', 45),
-                  Positioned(
-                    bottom: 0,
-                    right: 4,
-                    child: Container(
-                      padding: const EdgeInsets.all(2),
-                      decoration: const BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
+                  const SizedBox(height: 16),
+
+                  // --- 2. FOTO PROFIL DENGAN BADGE VERIFIKASI ---
+                  Stack(
+                    children: [
+                      UserAvatar(
+                          user.initials.isEmpty ? 'U' : user.initials, 45),
+                      Positioned(
+                        bottom: 0,
+                        right: 4,
+                        child: Container(
+                          padding: const EdgeInsets.all(2),
+                          decoration: const BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.check_circle,
+                            color: Color(0xFF22C55E),
+                            size: 20,
+                          ),
+                        ),
                       ),
-                      child: const Icon(
-                        Icons.check_circle,
-                        color: Color(0xFF22C55E),
-                        size: 20,
-                      ),
-                    ),
+                    ],
                   ),
-                ],
-              ),
-              const SizedBox(height: 16),
+                  const SizedBox(height: 16),
 
-              // --- 3. NAMA DAN EMAIL ---
-              const Text(
-                'Dimas A.',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme.textPrimary,
-                ),
-              ),
-              const SizedBox(height: 4),
-              const Text(
-                'dimas@student.example.ac.id',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: AppTheme.textSecondary,
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              // --- 4. TOMBOL EDIT PROFIL ---
-              OutlinedButton.icon(
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const EditProfileScreen(user: _user),
-                  ),
-                ),
-                icon: const Icon(Icons.edit_outlined,
-                    size: 16, color: AppTheme.textPrimary),
-                label: const Text(
-                  'Edit Profil',
-                  style: TextStyle(
-                      color: AppTheme.textPrimary,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 13),
-                ),
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: Color(0xFFE5E7EB)),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20)),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              // --- 5. GRID STATISTIK METER (WORKSPACE & MEMO) ---
-              Row(
-                children: [
-                  Expanded(child: _buildStatCard('4', 'Workspace')),
-                  const SizedBox(width: 16),
-                  Expanded(child: _buildStatCard('27', 'Memo')),
-                ],
-              ),
-              const SizedBox(height: 24),
-
-              // --- 6. GRUP MENU: AKUN ---
-              _buildSectionHeader('AKUN'),
-              _buildMenuCard([
-                _buildMenuItem(
-                  Icons.person_outline,
-                  'Informasi Pribadi',
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const EditProfileScreen(user: _user),
-                    ),
-                  ),
-                ),
-                _buildMenuItem(
-                  Icons.lock_open_outlined,
-                  'Ubah Kata Sandi',
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const ChangePasswordScreen(),
-                    ),
-                  ),
-                ),
-              ]),
-              const SizedBox(height: 20),
-
-              // --- 7. GRUP MENU: PREFERENSI ---
-              _buildSectionHeader('PREFERENSI'),
-              _buildMenuCard([
-                _buildMenuItem(
-                  Icons.notifications_none_outlined,
-                  'Notifikasi',
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const NotificationSettingsScreen(),
-                    ),
-                  ),
-                ),
-                _buildMenuItem(
-                  Icons.language_outlined,
-                  'Bahasa',
-                  trailingText: 'Indonesia',
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const LanguageScreen()),
-                  ),
-                ),
-              ]),
-              const SizedBox(height: 20),
-
-              // --- 8. GRUP MENU: TENTANG ---
-              _buildSectionHeader('TENTANG'),
-              _buildMenuCard([
-                _buildMenuItem(
-                  Icons.help_outline_outlined,
-                  'Bantuan',
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const HelpScreen()),
-                  ),
-                ),
-                _buildMenuItem(
-                  Icons.info_outline_rounded,
-                  'Versi Aplikasi',
-                  trailingText: '1.0.0',
-                  showArrow: false,
-                ),
-              ]),
-              const SizedBox(height: 32),
-
-              // --- 9. TOMBOL KELUAR ---
-              OutlinedButton.icon(
-                onPressed: () async {
-                  await AuthService().logout();
-                  if (!context.mounted) return;
-                  Navigator.pushNamedAndRemoveUntil(
-                      context, AppRoutes.login, (r) => false);
-                },
-                icon: const Icon(Icons.logout,
-                    size: 18, color: AppTheme.textPrimary),
-                label: const Text(
-                  'Keluar',
-                  style: TextStyle(
-                      color: AppTheme.textPrimary,
+                  // --- 3. NAMA DAN EMAIL ---
+                  Text(
+                    user.name,
+                    style: TextStyle(
+                      fontSize: 22,
                       fontWeight: FontWeight.bold,
-                      fontSize: 15),
-                ),
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size(double.infinity, 50),
-                  side:
-                      const BorderSide(color: AppTheme.textPrimary, width: 1.2),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(25)),
-                ),
+                      color: AppTheme.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    user.email,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: AppTheme.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // --- 4. TOMBOL EDIT PROFIL ---
+                  OutlinedButton.icon(
+                    onPressed: () => _openEditProfile(context, user),
+                    icon: const Icon(Icons.edit_outlined,
+                        size: 16, color: AppTheme.textPrimary),
+                    label: const Text(
+                      'Edit Profil',
+                      style: TextStyle(
+                          color: AppTheme.textPrimary,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Color(0xFFE5E7EB)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20)),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 10),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // --- 5. GRID STATISTIK METER (WORKSPACE & MEMO) ---
+                  Row(
+                    children: [
+                      Expanded(
+                          child:
+                              _buildStatCard('$workspaceCount', 'Workspace')),
+                      const SizedBox(width: 16),
+                      Expanded(child: _buildStatCard('$memoCount', 'Memo')),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+
+                  // --- 6. GRUP MENU: AKUN ---
+                  _buildSectionHeader('AKUN'),
+                  _buildMenuCard([
+                    _buildMenuItem(
+                      Icons.person_outline,
+                      'Informasi Pribadi',
+                      onTap: () => _openEditProfile(context, user),
+                    ),
+                    _buildMenuItem(
+                      Icons.lock_open_outlined,
+                      'Ubah Kata Sandi',
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const ChangePasswordScreen(),
+                        ),
+                      ),
+                    ),
+                  ]),
+                  const SizedBox(height: 20),
+
+                  // --- 7. GRUP MENU: PREFERENSI ---
+                  _buildSectionHeader('PREFERENSI'),
+                  _buildMenuCard([
+                    _buildMenuItem(
+                      Icons.notifications_none_outlined,
+                      'Notifikasi',
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const NotificationSettingsScreen(),
+                        ),
+                      ),
+                    ),
+                    _buildMenuItem(
+                      Icons.language_outlined,
+                      'Bahasa',
+                      trailingText: 'Indonesia',
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => const LanguageScreen()),
+                      ),
+                    ),
+                  ]),
+                  const SizedBox(height: 20),
+
+                  // --- 8. GRUP MENU: TENTANG ---
+                  _buildSectionHeader('TENTANG'),
+                  _buildMenuCard([
+                    _buildMenuItem(
+                      Icons.help_outline_outlined,
+                      'Bantuan',
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const HelpScreen()),
+                      ),
+                    ),
+                    _buildMenuItem(
+                      Icons.info_outline_rounded,
+                      'Versi Aplikasi',
+                      trailingText: '1.0.0',
+                      showArrow: false,
+                    ),
+                  ]),
+                  const SizedBox(height: 32),
+
+                  // --- 9. TOMBOL KELUAR ---
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      await AuthService().logout();
+                      if (!context.mounted) return;
+                      Navigator.pushNamedAndRemoveUntil(
+                          context, AppRoutes.login, (r) => false);
+                    },
+                    icon: const Icon(Icons.logout,
+                        size: 18, color: AppTheme.textPrimary),
+                    label: const Text(
+                      'Keluar',
+                      style: TextStyle(
+                          color: AppTheme.textPrimary,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(double.infinity, 50),
+                      side: const BorderSide(
+                          color: AppTheme.textPrimary, width: 1.2),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(25)),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                ],
               ),
-              const SizedBox(height: 24),
-            ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _openEditProfile(BuildContext context, AppUser user) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => EditProfileScreen(
+          user: user,
+          onSave: (updatedUser) => UserRepository().updateProfile(
+            name: updatedUser.name,
+            bio: updatedUser.bio,
           ),
         ),
       ),

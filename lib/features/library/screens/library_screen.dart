@@ -101,7 +101,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
         },
         backgroundColor: const Color(0xFF1E1E1E),
         foregroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: const CircleBorder(),
         child: const Icon(Icons.add, size: 28),
       ),
 

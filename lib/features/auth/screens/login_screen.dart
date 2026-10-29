@@ -262,63 +262,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 20),
-
-                  // --- Divider Pembatas "atau" ---
-                  const Row(
-                    children: [
-                      Expanded(child: Divider(color: Color(0XFFE0E0E0))),
-                      Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 16),
-                        child: Text(
-                          'atau',
-                          style: TextStyle(color: Colors.black38, fontSize: 13),
-                        ),
-                      ),
-                      Expanded(child: Divider(color: Color(0XFFE0E0E0))),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  // --- Tombol Lanjutkan dengan Google ---
-                  SizedBox(
-                    width: double.infinity,
-                    height: 54,
-                    child: OutlinedButton(
-                      onPressed: () {
-                        // Aksi login Google
-                      },
-                      style: OutlinedButton.styleFrom(
-                        backgroundColor: const Color(0XFFF4F5F7),
-                        side: BorderSide.none,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(30),
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          // Menggunakan placeholder icon jika aset Google belum ada
-                          Image.network(
-                            'wikimedia.org',
-                            width: 20,
-                            height: 20,
-                            errorBuilder: (context, error, stackTrace) =>
-                                const Icon(Icons.g_mobiledata, size: 24),
-                          ),
-                          const SizedBox(width: 12),
-                          const Text(
-                            'Lanjutkan dengan Google',
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
-                              color: AppTheme.textPrimary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-// --- Badge Keamanan Bawah ---
                   Center(
                     child: Container(
                       padding: const EdgeInsets.symmetric(
