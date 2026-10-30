@@ -6,6 +6,7 @@ import 'package:memospace/features/library/widgets/filter_sheet.dart';
 import 'package:memospace/features/library/widgets/workspace_picker_sheet.dart';
 import 'package:memospace/features/memo/cubit/memo_cubit.dart';
 import 'package:memospace/features/memo/models/memo.dart';
+import 'package:memospace/features/memo/widgets/memo_actions.dart';
 import 'package:memospace/features/workspace/cubit/workspace_cubit.dart';
 import '../../../core/app_theme.dart';
 import '../../../core/utils/date_formatter.dart';
@@ -25,6 +26,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
   String _jenis = 'Semua';
   String _urutan = 'Terbaru';
   bool _termasukArsip = false;
+  bool _hanyaTersimpan = false;
   String? _workspaceId; // null = semua workspace
   String _currentWorkspace = 'Semua workspace';
 
@@ -47,6 +49,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
       if (_workspaceId != null && m.workspaceId != _workspaceId) return false;
       if (_jenis != 'Semua' && _jenisOf(m) != _jenis) return false;
       if (!_termasukArsip && m.isArchived) return false;
+      if (_hanyaTersimpan && !m.isBookmarked) return false;
       if (_query.isNotEmpty) {
         final q = _query.toLowerCase();
         if (!m.title.toLowerCase().contains(q) &&
@@ -109,7 +112,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
       body: SafeArea(
         child: SingleChildScrollView(
           // PADDING UTAMA DIATUR DI SINI (Menghapus padding parsial di widget-widget dalam)
-          padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -133,7 +136,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 14),
 
               // --- SEARCH BAR ---
               TextField(
@@ -167,52 +170,74 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 controller: _searchController,
                 onChanged: (v) => setState(() => _query = v),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
 
               // --- SUB-FILTER ROW ---
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  InkWell(
-                    onTap: () async {
-                      final workspaces = context.read<WorkspaceCubit>().state;
-                      final selected =
-                          await showModalBottomSheet<Map<String, dynamic>>(
-                        context: context,
-                        backgroundColor: Colors.transparent,
-                        isScrollControlled: true,
-                        builder: (_) => WorkspacePickerSheet(
-                          workspaces: workspaces,
-                          activeWorkspaceId: _workspaceId,
-                        ),
-                      );
+                  Wrap(
+                    spacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      InkWell(
+                        onTap: () async {
+                          final workspaces =
+                              context.read<WorkspaceCubit>().state;
+                          final selected =
+                              await showModalBottomSheet<Map<String, dynamic>>(
+                            context: context,
+                            backgroundColor: Colors.transparent,
+                            isScrollControlled: true,
+                            builder: (_) => WorkspacePickerSheet(
+                              workspaces: workspaces,
+                              activeWorkspaceId: _workspaceId,
+                            ),
+                          );
 
-                      if (selected != null) {
-                        setState(() {
-                          _workspaceId = selected['id'];
-                          _currentWorkspace = selected['title'];
-                        });
-                      }
-                    },
-                    borderRadius: BorderRadius.circular(8),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                          vertical: 4.0, horizontal: 4.0),
-                      child: Row(
-                        children: [
-                          Text(
-                            _currentWorkspace, // Menggunakan variable dinamis dari state
-                            style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: AppTheme.textPrimary.withOpacity(0.8)),
+                          if (selected != null) {
+                            setState(() {
+                              _workspaceId = selected['id'];
+                              _currentWorkspace = selected['title'];
+                            });
+                          }
+                        },
+                        borderRadius: BorderRadius.circular(8),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 4,
+                            horizontal: 4,
                           ),
-                          const SizedBox(width: 2),
-                          const Icon(Icons.keyboard_arrow_down,
-                              size: 18, color: AppTheme.textPrimary),
-                        ],
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                _currentWorkspace,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppTheme.textPrimary.withOpacity(0.8),
+                                ),
+                              ),
+                              const SizedBox(width: 2),
+                              const Icon(
+                                Icons.keyboard_arrow_down,
+                                size: 18,
+                                color: AppTheme.textPrimary,
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
-                    ),
+                      FilterChip(
+                        label: const Text('Tersimpan'),
+                        selected: _hanyaTersimpan,
+                        onSelected: (value) =>
+                            setState(() => _hanyaTersimpan = value),
+                        visualDensity: VisualDensity.compact,
+                        shape: const StadiumBorder(),
+                      ),
+                    ],
                   ),
                   Row(
                     children: [
@@ -221,7 +246,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                         style: const TextStyle(
                             fontSize: 13, color: AppTheme.textSecondary),
                       ),
-                      const SizedBox(width: 14),
+                      // const SizedBox(width: 14),
                       IconButton(
                         onPressed: () {
                           setState(() {
@@ -239,7 +264,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                         padding: EdgeInsets.zero,
                         constraints: const BoxConstraints(),
                       ),
-                      const SizedBox(width: 10),
+                      // const SizedBox(width: 10),
                       IconButton(
                         onPressed: () {
                           setState(() {
@@ -261,7 +286,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                   )
                 ],
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
 
               // --- LIST CONTENT CARD ---
               if (!_isGridView) ...[
@@ -281,6 +306,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                         .toUpperCase();
 
                     return _buildLibraryCard(
+                      memo: memo,
                       category: memo.category,
                       badgeText: memo.fileName != null
                           ? memo.fileName!.split('.').last.toUpperCase()
@@ -293,7 +319,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
                       userName: memo.authorName,
                       timeAgo:
                           DateFormatter.getRelativeTimeText(memo.updatedAt),
-                      isBookmarked: memo.isBookmarked,
                       // Lampiran dinamis jika ada property fileName
                       attachmentWidget: memo.fileName != null
                           ? _buildPdfAttachment(memo.fileName!)
@@ -309,14 +334,15 @@ class _LibraryScreenState extends State<LibraryScreen> {
                   itemCount: visibleMemos.length,
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 2,
-                    crossAxisSpacing: 12,
-                    mainAxisSpacing: 12,
+                    crossAxisSpacing: 8,
+                    mainAxisSpacing: 8,
                     childAspectRatio:
                         0.85, // Sesuaikan rasio agar tidak luapan/overflow
                   ),
                   itemBuilder: (context, index) {
                     final memo = visibleMemos[index];
                     return _buildGridLibraryCard(
+                      memo: memo,
                       category: memo.category,
                       title: memo.title,
                       description: memo.content,
@@ -337,6 +363,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
 // --- WIDGET HELPER BUILDER KARTU UTAMA ---
   Widget _buildLibraryCard({
+    required Memo memo,
     required String category,
     required String? badgeText,
     required String title,
@@ -344,16 +371,15 @@ class _LibraryScreenState extends State<LibraryScreen> {
     required String userInitials,
     required String userName,
     required String timeAgo,
-    required bool isBookmarked, // Tambahkan parameter ini
     Widget? attachmentWidget,
   }) {
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 8),
+      margin: const EdgeInsets.symmetric(vertical: 4),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: const Color(0xFFE5E5E5), width: 1),
-        borderRadius: BorderRadius.circular(12),
+        color: AppTheme.background,
+        border: Border.all(color: AppTheme.border, width: 1),
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -403,19 +429,42 @@ class _LibraryScreenState extends State<LibraryScreen> {
                       ),
                     ),
                   ],
+                  if (memo.isArchived) ...[
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppTheme.editorToolbarBackground,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Text(
+                        'Diarsipkan',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                          color: AppTheme.textSecondary,
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
               ),
-              // 💡 Ubah ikon bookmark menjadi dinamis sesuai data dummy
-              Icon(
-                isBookmarked ? Icons.bookmark : Icons.bookmark_border,
-                color: isBookmarked
-                    ? const Color(0xFF1E1E1E)
-                    : AppTheme.textSecondary,
-                size: 20,
+              InkWell(
+                onTap: () => context.read<MemoCubit>().toggleBookmark(memo),
+                child: Icon(
+                  memo.isBookmarked ? Icons.bookmark : Icons.bookmark_border,
+                  color: memo.isBookmarked
+                      ? AppTheme.textPrimary
+                      : AppTheme.textSecondary,
+                  size: 20,
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           Text(
             title,
             style: const TextStyle(
@@ -435,9 +484,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
             const SizedBox(height: 12),
             attachmentWidget,
           ],
-          const SizedBox(height: 16),
+          const SizedBox(height: 10),
           const Divider(height: 1, thickness: 0.5, color: Color(0xFFE5E5E5)),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -477,8 +526,15 @@ class _LibraryScreenState extends State<LibraryScreen> {
                   ),
                 ],
               ),
-              const Icon(Icons.more_vert,
-                  color: AppTheme.textSecondary, size: 16),
+              if (isMemoAuthor(memo))
+                InkWell(
+                  onTap: () => confirmDeleteMemo(context, memo),
+                  child: const Icon(
+                    Icons.delete_outline,
+                    size: 20,
+                    color: Colors.red,
+                  ),
+                ),
             ],
           )
         ],
@@ -488,17 +544,18 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
   // --- WIDGET HELPER KHUSUS KARTU GRID ---
   Widget _buildGridLibraryCard({
+    required Memo memo,
     required String category,
     required String title,
     required String description,
     required String timeAgo,
   }) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: const Color(0xFFE5E5E5), width: 1),
-        borderRadius: BorderRadius.circular(12),
+        color: AppTheme.background,
+        border: Border.all(color: AppTheme.border, width: 1),
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -519,7 +576,25 @@ class _LibraryScreenState extends State<LibraryScreen> {
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          const SizedBox(height: 8),
+          if (memo.isArchived) ...[
+            const SizedBox(height: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: AppTheme.editorToolbarBackground,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: const Text(
+                'Diarsipkan',
+                style: TextStyle(
+                  fontSize: 10,
+                  color: AppTheme.textSecondary,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
+          const SizedBox(height: 6),
           // Judul Catatan
           Text(
             title,
@@ -530,7 +605,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 fontWeight: FontWeight.bold,
                 color: AppTheme.textPrimary),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 2),
           // Deskripsi Singkat
           Expanded(
             child: Text(
@@ -541,9 +616,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
                   fontSize: 12, color: AppTheme.textSecondary, height: 1.3),
             ),
           ),
-          const SizedBox(height: 8),
-          const Divider(height: 1, thickness: 0.5, color: Color(0xFFE5E5E5)),
           const SizedBox(height: 6),
+          const Divider(height: 1, thickness: 0.5, color: Color(0xFFE5E5E5)),
+          const SizedBox(height: 4),
           // Waktu Pembuatan
           Text(
             timeAgo,

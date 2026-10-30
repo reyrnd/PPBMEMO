@@ -7,18 +7,12 @@ class BoardView extends StatefulWidget {
   final Widget canvasBoard;
   final Widget kanbanBoard;
   final WorkspaceBoardType initialBoard;
-  final VoidCallback? onAddMemo;
-  final VoidCallback? onSearch;
-  final VoidCallback? onFilter;
 
   const BoardView({
     super.key,
     required this.canvasBoard,
     required this.kanbanBoard,
     this.initialBoard = WorkspaceBoardType.canvas,
-    this.onAddMemo,
-    this.onSearch,
-    this.onFilter,
   });
 
   @override
@@ -33,30 +27,7 @@ class _BoardViewState extends State<BoardView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
-          children: [
-            Expanded(child: _buildBoardToggle()),
-            const SizedBox(width: 8),
-            IconButton(
-              tooltip: 'Cari memo',
-              onPressed: widget.onSearch,
-              icon: const Icon(Icons.search),
-              color: AppTheme.textPrimary,
-            ),
-            IconButton(
-              tooltip: 'Filter memo',
-              onPressed: widget.onFilter,
-              icon: const Icon(Icons.filter_list),
-              color: AppTheme.textPrimary,
-            ),
-            IconButton(
-              tooltip: 'Tambah memo',
-              onPressed: widget.onAddMemo,
-              icon: const Icon(Icons.add),
-              color: AppTheme.textPrimary,
-            ),
-          ],
-        ),
+        _buildBoardToggle(),
         const SizedBox(height: 12),
         Expanded(
           child: IndexedStack(
@@ -70,7 +41,7 @@ class _BoardViewState extends State<BoardView> {
 
   Widget _buildBoardToggle() {
     return Container(
-      padding: const EdgeInsets.all(4),
+      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 6),
       decoration: BoxDecoration(
         color: AppTheme.editorToolbarBackground,
         borderRadius: BorderRadius.circular(30),

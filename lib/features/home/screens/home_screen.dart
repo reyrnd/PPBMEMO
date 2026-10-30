@@ -71,7 +71,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -108,7 +108,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 14),
 
               // --- 3. SEARCH BAR ---
               TextField(
@@ -124,7 +124,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   prefixIcon: const Icon(Icons.search, color: Colors.black38),
                 ),
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 14),
 
               // --- 4. QUICK ACTION PILLS ---
               Row(
@@ -180,14 +180,14 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 20),
 
               // --- 5. SECTION: WORKSPACE SAYA ---
               SectionHeader(
                 title: 'Workspace Saya',
                 onAction: widget.onSeeAllWorkspaces,
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
               workspaces.isEmpty
                   ? Container(
                       width: double.infinity,
@@ -250,7 +250,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         ],
                       ),
                     ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 20),
 
               // --- 6. SECTION: MEMO TERBARU ---
               SectionHeader(
@@ -304,7 +304,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           .take(5)
                           .map((m) => Padding(
                                 padding:
-                                    const EdgeInsets.symmetric(vertical: 8),
+                                    const EdgeInsets.symmetric(vertical: 4),
                                 child: GestureDetector(
                                   onTap: () => Navigator.push(
                                     context,
@@ -319,16 +319,16 @@ class _HomeScreenState extends State<HomeScreen> {
                               ))
                           .toList(),
                     ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 20),
 
               // --- 7. SECTION: AKTIVITAS TIM ---
               SectionHeader(
                 title: 'Aktivitas Tim',
                 onAction: widget.onSeeAllActivities,
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
               _buildRecentActivities(),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
             ],
           ),
         ),
@@ -364,19 +364,24 @@ class _HomeScreenState extends State<HomeScreen> {
 
         return Container(
           decoration: BoxDecoration(
+            color: AppTheme.background,
             border: Border.all(color: AppTheme.border),
             borderRadius: BorderRadius.circular(16),
           ),
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
           child: Column(
             children: [
               for (var index = 0; index < activities.length; index++) ...[
                 Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  padding: const EdgeInsets.symmetric(vertical: 10),
                   child: ActivityRow(activity: activities[index]),
                 ),
                 if (index < activities.length - 1)
-                  const Divider(color: AppTheme.border, height: 1),
+                  const Divider(
+                    color: AppTheme.border,
+                    height: 1,
+                    thickness: 1,
+                  ),
               ],
             ],
           ),

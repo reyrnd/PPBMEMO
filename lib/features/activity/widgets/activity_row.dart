@@ -22,12 +22,13 @@ class ActivityRow extends StatelessWidget {
               RichText(
                 text: TextSpan(
                   style: const TextStyle(
-                      color: AppTheme.textPrimary, fontSize: 13, height: 1.3),
+                      color: AppTheme.primary, fontSize: 13, height: 1.3),
                   children: [
                     TextSpan(text: '${activity.action} '),
                     TextSpan(
                         text: activity.target,
                         style: const TextStyle(
+                            color: AppTheme.primary,
                             fontWeight: FontWeight.bold,
                             decoration: TextDecoration.underline)),
                   ],
@@ -35,7 +36,8 @@ class ActivityRow extends StatelessWidget {
               ),
               const SizedBox(height: 2),
               Text(DateFormatter.getRelativeTimeText(activity.time),
-                  style: const TextStyle(fontSize: 11, color: Colors.black38)),
+                  style: const TextStyle(
+                      fontSize: 11, color: AppTheme.textSecondary)),
             ],
           ),
         )

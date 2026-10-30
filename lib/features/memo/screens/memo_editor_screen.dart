@@ -7,6 +7,7 @@ import 'package:memospace/features/memo/models/comment.dart';
 import 'package:memospace/features/memo/models/memo.dart';
 import 'package:memospace/features/memo/widgets/comments_sheet.dart';
 import 'package:memospace/features/memo/widgets/editor_toolbar.dart';
+import 'package:memospace/features/memo/widgets/memo_actions.dart';
 import 'package:memospace/features/workspace/cubit/workspace_cubit.dart';
 import '../../../core/app_theme.dart';
 
@@ -63,6 +64,19 @@ class _MemoEditorScreenState extends State<MemoEditorScreen> {
       onSend: (text) => _commentRepository.add(
           widget.workspaceId, memo.id, _titleController.text.trim(), text),
     );
+  }
+
+  Future<void> _archiveMemo(Memo memo) async {
+    final memoCubit = context.read<MemoCubit>();
+    await memoCubit.setArchived(memo, !memo.isArchived);
+    if (!mounted) return;
+    Navigator.pop(context);
+  }
+
+  Future<void> _deleteMemo(Memo memo) async {
+    final deleted = await confirmDeleteMemo(context, memo);
+    if (!deleted || !mounted) return;
+    Navigator.pop(context);
   }
 
   Future<void> _saveMemo() async {
@@ -226,8 +240,38 @@ class _MemoEditorScreenState extends State<MemoEditorScreen> {
                               ),
                               const SizedBox(width: 8),
                             ],
-                            const Icon(Icons.more_vert,
-                                color: AppTheme.textPrimary, size: 22),
+                            if (_canEdit && widget.memo != null)
+                              PopupMenuButton<String>(
+                                icon: const Icon(
+                                  Icons.more_vert,
+                                  color: AppTheme.textPrimary,
+                                ),
+                                onSelected: (value) async {
+                                  final memo = widget.memo!;
+                                  if (value == 'archive') {
+                                    await _archiveMemo(memo);
+                                  } else if (value == 'delete') {
+                                    await _deleteMemo(memo);
+                                  }
+                                },
+                                itemBuilder: (_) => [
+                                  PopupMenuItem(
+                                    value: 'archive',
+                                    child: Text(
+                                      widget.memo!.isArchived
+                                          ? 'Keluarkan dari arsip'
+                                          : 'Arsipkan',
+                                    ),
+                                  ),
+                                  const PopupMenuItem(
+                                    value: 'delete',
+                                    child: Text(
+                                      'Hapus memo',
+                                      style: TextStyle(color: Colors.red),
+                                    ),
+                                  ),
+                                ],
+                              ),
                           ],
                         )
                       ],

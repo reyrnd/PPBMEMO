@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:memospace/core/app_theme.dart';
 import 'package:memospace/features/memo/models/memo.dart';
@@ -5,13 +7,13 @@ import 'package:memospace/features/memo/widgets/memo_card.dart';
 
 class CanvasBoard extends StatefulWidget {
   final List<Memo> memos;
-  final ValueChanged<Map<String, Offset>>? onPositionsChanged;
+  final void Function(Memo memo, Offset position)? onMemoMoved;
   final ValueChanged<Memo>? onMemoTap;
 
   const CanvasBoard({
     super.key,
     required this.memos,
-    this.onPositionsChanged,
+    this.onMemoMoved,
     this.onMemoTap,
   });
 
@@ -24,11 +26,16 @@ class _CanvasBoardState extends State<CanvasBoard> {
   static const _cardSize = Size(260, 230);
 
   final _transformationController = TransformationController();
-  final Map<String, Offset> _positions = {};
+  final _viewportKey = GlobalKey();
+  String? _draggingId;
+  Offset? _dragPosition;
+  Offset? _dragPointer;
+  Timer? _autoPanTimer;
   var _scale = 1.0;
 
   @override
   void dispose() {
+    _autoPanTimer?.cancel();
     _transformationController.dispose();
     super.dispose();
   }
@@ -43,12 +50,80 @@ class _CanvasBoardState extends State<CanvasBoard> {
     );
   }
 
-  Offset _positionFor(int index, Memo memo) =>
-      _positions[memo.id] ?? _initialPosition(index);
+  Offset _positionFor(int index, Memo memo) {
+    if (_draggingId == memo.id && _dragPosition != null) return _dragPosition!;
+    if (memo.boardX != null && memo.boardY != null) {
+      return Offset(memo.boardX!, memo.boardY!);
+    }
+    return _initialPosition(index);
+  }
 
   void _onInteractionEnd(ScaleEndDetails details) {
     final nextScale = _transformationController.value.getMaxScaleOnAxis();
     setState(() => _scale = nextScale);
+  }
+
+  void _startMemoDrag(DragStartDetails details) {
+    _dragPointer = details.globalPosition;
+    _autoPanTimer ??= Timer.periodic(
+      const Duration(milliseconds: 16),
+      (_) => _autoPan(),
+    );
+  }
+
+  void _updateMemoDrag(DragUpdateDetails details, Memo memo) {
+    _dragPointer = details.globalPosition;
+    _moveMemo(memo, details.delta);
+  }
+
+  void _cancelMemoDrag() {
+    _dragPointer = null;
+    _autoPanTimer?.cancel();
+    _autoPanTimer = null;
+    if (_draggingId != null || _dragPosition != null) {
+      setState(() {
+        _draggingId = null;
+        _dragPosition = null;
+      });
+    }
+  }
+
+  void _autoPan() {
+    final pointer = _dragPointer;
+    final renderObject = _viewportKey.currentContext?.findRenderObject();
+    if (pointer == null ||
+        renderObject is! RenderBox ||
+        !renderObject.hasSize) {
+      return;
+    }
+
+    const edgeSize = 48.0;
+    const speedFactor = 0.2;
+    final localPointer = renderObject.globalToLocal(pointer);
+    final size = renderObject.size;
+
+    double edgeDelta(double value, double extent) {
+      if (value < edgeSize) {
+        return (edgeSize - value).clamp(0.0, edgeSize) * speedFactor;
+      }
+      if (value > extent - edgeSize) {
+        return -(value - (extent - edgeSize)).clamp(0.0, edgeSize) *
+            speedFactor;
+      }
+      return 0;
+    }
+
+    final dx = edgeDelta(localPointer.dx, size.width);
+    final dy = edgeDelta(localPointer.dy, size.height);
+    if (dx == 0 && dy == 0) return;
+
+    final matrix = _transformationController.value.clone();
+    final scale = matrix.getMaxScaleOnAxis();
+    matrix[12] =
+        (matrix[12] + dx).clamp(size.width - _canvasSize.width * scale, 0.0);
+    matrix[13] =
+        (matrix[13] + dy).clamp(size.height - _canvasSize.height * scale, 0.0);
+    _transformationController.value = matrix;
   }
 
   void _changeZoom(double factor) {
@@ -72,13 +147,16 @@ class _CanvasBoardState extends State<CanvasBoard> {
           .clamp(0.0, _canvasSize.height - _cardSize.height),
     );
 
-    setState(() => _positions[memo.id] = nextPosition);
-    widget.onPositionsChanged?.call(Map.unmodifiable(_positions));
+    setState(() {
+      _draggingId = memo.id;
+      _dragPosition = nextPosition;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return Stack(
+      key: _viewportKey,
       children: [
         Positioned.fill(
           child: ClipRect(
@@ -120,7 +198,14 @@ class _CanvasBoardState extends State<CanvasBoard> {
       top: position.dy,
       width: _cardSize.width,
       child: GestureDetector(
-        onPanUpdate: (details) => _moveMemo(memo, details.delta),
+        onPanStart: _startMemoDrag,
+        onPanUpdate: (details) => _updateMemoDrag(details, memo),
+        onPanEnd: (_) {
+          final position = _dragPosition;
+          if (position != null) widget.onMemoMoved?.call(memo, position);
+          _cancelMemoDrag();
+        },
+        onPanCancel: _cancelMemoDrag,
         onTap: widget.onMemoTap == null ? null : () => widget.onMemoTap!(memo),
         child: Material(
           color: AppTheme.background,

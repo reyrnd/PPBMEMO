@@ -17,6 +17,9 @@ class Memo {
   final bool isPinned;
   final bool isBookmarked;
   final bool isArchived;
+  final double? boardX;
+  final double? boardY;
+  final String? boardStatus; // 'planned' | 'inProgress' | 'completed'
 
   const Memo({
     required this.id,
@@ -32,6 +35,9 @@ class Memo {
     this.isPinned = false,
     this.isBookmarked = false,
     this.isArchived = false,
+    this.boardX,
+    this.boardY,
+    this.boardStatus = 'planned',
   });
 
   Memo copyWith({
@@ -85,6 +91,9 @@ class Memo {
       isBookmarked: (data['bookmarkedBy'] as List? ?? [])
           .contains(FirebaseAuth.instance.currentUser?.uid),
       isArchived: data['archived'] ?? false,
+      boardX: (data['boardX'] as num?)?.toDouble(),
+      boardY: (data['boardY'] as num?)?.toDouble(),
+      boardStatus: data['boardStatus'] as String?,
     );
   }
 

@@ -11,7 +11,9 @@ import 'package:memospace/features/activity/models/activity.dart';
 import 'package:memospace/features/activity/widgets/activity_row.dart';
 import 'package:memospace/features/memo/cubit/memo_cubit.dart';
 import 'package:memospace/features/memo/data/comment_repository.dart';
+import 'package:memospace/features/memo/models/memo.dart';
 import 'package:memospace/features/memo/screens/memo_editor_screen.dart';
+import 'package:memospace/features/memo/widgets/memo_actions.dart';
 import 'package:memospace/features/workspace/cubit/workspace_cubit.dart';
 import 'package:memospace/features/workspace/models/workspace.dart';
 import 'package:memospace/features/workspace/models/workspace_member.dart';
@@ -161,6 +163,7 @@ class _WorkspaceDetailScreenState extends State<WorkspaceDetailScreen> {
         .watch<MemoCubit>()
         .state
         .where((memo) => memo.workspaceId == workspace.id)
+        .where((memo) => !memo.isArchived)
         .toList();
     final latestMemos = memos.toList();
     switch (_urutan) {
@@ -367,7 +370,7 @@ class _WorkspaceDetailScreenState extends State<WorkspaceDetailScreen> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppTheme.primary,
                         elevation: 0,
-                        padding: const EdgeInsets.symmetric(vertical: 20),
+                        padding: const EdgeInsets.symmetric(vertical: 15),
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(30)),
                       ),
@@ -445,6 +448,12 @@ class _WorkspaceDetailScreenState extends State<WorkspaceDetailScreen> {
                     ),
                   ),
                   trailing: PopupMenuButton<String>(
+                    color: AppTheme.background,
+                    surfaceTintColor: AppTheme.background,
+                    elevation: 4,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(24),
+                    ),
                     onSelected: (v) => setState(() => _urutan = v),
                     itemBuilder: (_) => [
                       for (final opt in const [
@@ -452,10 +461,30 @@ class _WorkspaceDetailScreenState extends State<WorkspaceDetailScreen> {
                         'Terlama',
                         'Judul A-Z'
                       ])
-                        CheckedPopupMenuItem(
+                        PopupMenuItem(
                           value: opt,
-                          checked: _urutan == opt,
-                          child: Text(opt),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.check,
+                                size: 18,
+                                color: _urutan == opt
+                                    ? AppTheme.primary
+                                    : Colors.transparent,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                opt,
+                                style: const TextStyle(
+                                  color: AppTheme.textPrimary,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                     ],
                     child: const Row(
@@ -484,6 +513,7 @@ class _WorkspaceDetailScreenState extends State<WorkspaceDetailScreen> {
                 else
                   for (final memo in latestMemos)
                     _buildMemoItem(
+                      memo: memo,
                       commentsCountStream:
                           _watchCommentCount(memo.workspaceId, memo.id),
                       onTap: () => Navigator.push(
@@ -507,16 +537,37 @@ class _WorkspaceDetailScreenState extends State<WorkspaceDetailScreen> {
                 const SizedBox(height: 16),
               ] else if (_tab == 1)
                 SizedBox(
-                  height: MediaQuery.of(context).size.height * 0.6,
+                  height: MediaQuery.sizeOf(context).height * 0.7,
                   child: BoardView(
-                    canvasBoard: CanvasBoard(memos: memos),
-                    kanbanBoard: KanbanBoard(memos: memos),
-                    onAddMemo: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
+                    canvasBoard: CanvasBoard(
+                      memos: memos,
+                      onMemoMoved: (memo, position) => context
+                          .read<MemoCubit>()
+                          .moveOnCanvas(memo, position),
+                      onMemoTap: (memo) => Navigator.push(
+                        context,
+                        MaterialPageRoute(
                           builder: (_) => MemoEditorScreen(
-                                workspaceId: widget.workspace.id,
-                              )),
+                            workspaceId: memo.workspaceId,
+                            memo: memo,
+                          ),
+                        ),
+                      ),
+                    ),
+                    kanbanBoard: KanbanBoard(
+                      memos: memos,
+                      onMemoMoved: (memo, status) => context
+                          .read<MemoCubit>()
+                          .setBoardStatus(memo, status.name),
+                      onMemoTap: (memo) => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => MemoEditorScreen(
+                            workspaceId: memo.workspaceId,
+                            memo: memo,
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 )
@@ -540,14 +591,38 @@ class _WorkspaceDetailScreenState extends State<WorkspaceDetailScreen> {
                         style: TextStyle(color: AppTheme.textSecondary),
                       );
                     }
-                    return Column(
-                      children: [
-                        for (final activity in activities)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 16),
-                            child: ActivityRow(activity: activity),
-                          ),
-                      ],
+                    return Container(
+                      decoration: BoxDecoration(
+                        color: AppTheme.background,
+                        border: Border.all(color: AppTheme.border),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 4,
+                      ),
+                      child: Column(
+                        children: [
+                          for (var index = 0;
+                              index < activities.length;
+                              index++) ...[
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 10,
+                              ),
+                              child: ActivityRow(
+                                activity: activities[index],
+                              ),
+                            ),
+                            if (index < activities.length - 1)
+                              const Divider(
+                                color: AppTheme.border,
+                                height: 1,
+                                thickness: 1,
+                              ),
+                          ],
+                        ],
+                      ),
                     );
                   },
                 ),
@@ -614,6 +689,7 @@ class _WorkspaceDetailScreenState extends State<WorkspaceDetailScreen> {
   }
 
   Widget _buildMemoItem({
+    required Memo memo,
     required VoidCallback onTap,
     required Stream<int> commentsCountStream,
     required bool isPinned,
@@ -703,8 +779,28 @@ class _WorkspaceDetailScreenState extends State<WorkspaceDetailScreen> {
                       )
                     else
                       const SizedBox.shrink(),
-                    const Icon(Icons.bookmark_border,
-                        color: AppTheme.textSecondary, size: 20),
+                    InkWell(
+                      onTap: () =>
+                          context.read<MemoCubit>().toggleBookmark(memo),
+                      child: Icon(
+                        memo.isBookmarked
+                            ? Icons.bookmark
+                            : Icons.bookmark_border,
+                        size: 20,
+                        color: AppTheme.textPrimary,
+                      ),
+                    ),
+                    if (isMemoAuthor(memo)) ...[
+                      const SizedBox(width: 12),
+                      InkWell(
+                        onTap: () => confirmDeleteMemo(context, memo),
+                        child: const Icon(
+                          Icons.delete_outline,
+                          size: 20,
+                          color: Colors.red,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
                 const SizedBox(height: 10),

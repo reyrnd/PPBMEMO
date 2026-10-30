@@ -83,4 +83,10 @@ class MemoRepository {
 
   Future<void> setArchived(String wsId, String memoId, bool v) =>
       _memos(wsId).doc(memoId).update({'archived': v});
+
+  Future<void> moveOnCanvas(String wsId, String memoId, double x, double y) =>
+      _memos(wsId).doc(memoId).update({'boardX': x, 'boardY': y});
+
+  Future<void> setBoardStatus(String wsId, String memoId, String status) =>
+      _memos(wsId).doc(memoId).update({'boardStatus': status});
 }

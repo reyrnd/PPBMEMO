@@ -36,7 +36,7 @@ class SectionHeader extends StatelessWidget {
                 ),
               ),
               if (badge != null) ...[
-                const SizedBox(width: 8),
+                const SizedBox(width: 6),
                 badge!,
               ],
             ],
@@ -47,6 +47,12 @@ class SectionHeader extends StatelessWidget {
         else if (onAction != null)
           TextButton(
             onPressed: onAction,
+            style: TextButton.styleFrom(
+              padding: EdgeInsets.zero,
+              minimumSize: const Size(0, 36),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              visualDensity: VisualDensity.compact,
+            ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
