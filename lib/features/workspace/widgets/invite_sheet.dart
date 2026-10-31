@@ -1,456 +1,217 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:memospace/core/app_theme.dart';
-import 'package:memospace/core/utils/validators.dart';
-import 'package:memospace/core/widgets/app_bottom_sheet.dart';
-import 'package:memospace/features/workspace/models/workspace_member.dart';
+import '../../../core/app_theme.dart';
 
-Future<void> showInviteSheet({
-  required BuildContext context,
-  required String inviteCode,
-  required List<WorkspaceMember> members,
-  required Future<void> Function(String email) onSendInvite,
-  required Future<void> Function(String inviteCode) onShareInvite,
-}) {
-  return showAppBottomSheet<void>(
-    context: context,
-    title: 'Undang anggota',
-    heightFactor:
-        0.88, // Ditambahkan sedikit ruang tinggi agar daftar anggota muat lebih banyak
-    child: InviteSheet(
-      inviteCode: inviteCode,
-      members: members,
-      onSendInvite: onSendInvite,
-      onShareInvite: onShareInvite,
-    ),
-  );
-}
-
-class InviteSheet extends StatefulWidget {
-  final String inviteCode;
-  final List<WorkspaceMember> members;
-  final Future<void> Function(String email) onSendInvite;
-  final Future<void> Function(String inviteCode) onShareInvite;
-
-  const InviteSheet({
-    super.key,
-    required this.inviteCode,
-    required this.members,
-    required this.onSendInvite,
-    required this.onShareInvite,
-  });
-
-  @override
-  State<InviteSheet> createState() => _InviteSheetState();
-}
-
-class _InviteSheetState extends State<InviteSheet> {
-  final _formKey = GlobalKey<FormState>();
-  final _emailController = TextEditingController();
-  var _isSending = false;
-
-  @override
-  void dispose() {
-    _emailController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _copyInviteCode() async {
-    await Clipboard.setData(ClipboardData(text: widget.inviteCode));
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Kode undangan disalin.')),
-    );
-  }
-
-  Future<void> _sendInvite() async {
-    if (!_formKey.currentState!.validate() || _isSending) return;
-
-    setState(() => _isSending = true);
-    try {
-      await widget.onSendInvite(_emailController.text.trim());
-      if (!mounted) return;
-      _emailController.clear();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Anggota berhasil ditambahkan.')),
-      );
-    } catch (error) {
-      if (!mounted) return;
-      final message = error.toString().replaceFirst('Exception: ', '');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
-    } finally {
-      if (mounted) setState(() => _isSending = false);
-    }
-  }
-
-  Future<void> _shareInvite() async {
-    try {
-      await widget.onShareInvite(widget.inviteCode);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Kode undangan disalin untuk dibagikan.')),
-      );
-    } catch (error) {
-      if (!mounted) return;
-      final message = error.toString().replaceFirst('Exception: ', '');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
-    }
-  }
+class InviteSheet extends StatelessWidget {
+  const InviteSheet({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // Sub-deskripsi atas sesuai gambar referensi Anda
-        const Text(
-          'Kolaborasi langsung dalam workspace proyek',
-          style: TextStyle(
-            fontSize: 13,
-            color: AppTheme.textSecondary,
+    // Simulasi data internal kode unik dari berkas TSX
+    const String workspaceName = 'Northstar Studio';
+    const String inviteCode = 'NORTH-24Q';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.only(left: 20, right: 20, bottom: 32, top: 16),
+      decoration: const BoxDecoration(
+        color: AppTheme.canvas,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 1. Top Indicator Handle Bar
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                color: AppTheme.line,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
           ),
-        ),
-        const SizedBox(height: 16),
-        Expanded(
-          child: ListView(
-            padding: EdgeInsets.zero,
+
+          // 2. Header Panel Sheet
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // --- 1. SEKSI KODE UNDANGAN (CARD BOX) ---
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF8F9FA),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFE5E7EB)),
-                ),
+              Expanded(
                 child: Column(
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: const [
-                            Icon(Icons.link,
-                                size: 16, color: AppTheme.textSecondary),
-                            SizedBox(width: 6),
-                            Text(
-                              'KODE UNDANGAN',
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.black45,
-                                letterSpacing: 0.5,
-                              ),
-                            ),
-                          ],
-                        ),
-                        Row(
-                          children: const [
-                            Icon(Icons.circle,
-                                size: 6, color: Color(0xFF16A34A)),
-                            SizedBox(width: 4),
-                            Text(
-                              'Berlaku',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: Color(0xFF16A34A),
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: const [
+                    Text(
+                      'Invite teammates',
+                      style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: AppTheme.ink),
                     ),
-                    const SizedBox(height: 14),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 14),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFE5E7EB)),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          SelectableText(
-                            widget.inviteCode,
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 1.5,
-                              color: AppTheme.textPrimary,
-                            ),
-                          ),
-                          const Text(
-                            'Kode aktif',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: AppTheme.textSecondary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    // Tombol Aksi Split (Salin & Bagikan)
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: _copyInviteCode,
-                            icon: const Icon(Icons.copy,
-                                size: 14, color: AppTheme.textPrimary),
-                            label: const Text(
-                              'Salin',
-                              style: TextStyle(
-                                color: AppTheme.textPrimary,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 13,
-                              ),
-                            ),
-                            style: OutlinedButton.styleFrom(
-                              backgroundColor: Colors.white,
-                              side: const BorderSide(color: Color(0xFFE5E7EB)),
-                              minimumSize: const Size(0, 44),
-                              shape: const StadiumBorder(),
-                              elevation: 0,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            onPressed: _shareInvite,
-                            icon: const Icon(Icons.share_outlined,
-                                size: 14, color: Colors.white),
-                            label: const Text(
-                              'Salin untuk dibagikan',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 13,
-                              ),
-                            ),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppTheme.textPrimary,
-                              minimumSize: const Size(0, 44),
-                              shape: const StadiumBorder(),
-                              elevation: 0,
-                            ),
-                          ),
-                        ),
-                      ],
+                    SizedBox(height: 4),
+                    Text(
+                      'Share this unique code to join $workspaceName.',
+                      style: TextStyle(
+                          fontSize: 10, color: AppTheme.muted, height: 1.4),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 24),
-
-              // --- 2. SEKSI UNDANG VIA EMAIL ---
-              const Text(
-                'Tambah akun melalui email',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13,
-                  color: AppTheme.textPrimary,
+              GestureDetector(
+                onTap: () => Navigator.pop(context),
+                child: Container(
+                  width: 36,
+                  height: 36,
+                  decoration: const BoxDecoration(
+                      color: Colors.white, shape: BoxShape.circle),
+                  child: const Icon(Icons.close_rounded,
+                      color: AppTheme.ink, size: 18),
                 ),
               ),
-              const SizedBox(height: 8),
-              Form(
-                key: _formKey,
-                child: TextFormField(
-                  controller: _emailController,
-                  keyboardType: TextInputType.emailAddress,
-                  textInputAction: TextInputAction.send,
-                  validator: Validators.email,
-                  onFieldSubmitted: (_) => _sendInvite(),
-                  style: const TextStyle(
-                      color: AppTheme.textPrimary, fontSize: 14),
-                  decoration: InputDecoration(
-                    hintText: 'nama@email.com',
-                    hintStyle:
-                        const TextStyle(color: Colors.black38, fontSize: 14),
-                    prefixIcon: const Icon(Icons.email_outlined,
-                        size: 18, color: Colors.black38),
-                    filled: true,
-                    fillColor: const Color(0xFFF3F4F6),
-                    contentPadding: const EdgeInsets.symmetric(vertical: 14),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide.none,
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide.none,
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: const BorderSide(
-                          color: AppTheme.textPrimary, width: 1),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              ElevatedButton.icon(
-                onPressed: _isSending ? null : _sendInvite,
-                icon: _isSending
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.white),
-                      )
-                    : const Icon(Icons.play_arrow_outlined, size: 16),
-                label: const Text(
-                  'Tambahkan anggota',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.textPrimary,
-                  foregroundColor: Colors.white,
-                  minimumSize: const Size(double.infinity, 48),
-                  shape: const StadiumBorder(),
-                  elevation: 0,
-                ),
-              ),
-              const SizedBox(height: 28),
-              // --- 3. DAFTAR ANGGOTA WORKSPACE ---
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      const Text(
-                        'Anggota',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.textPrimary,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF3F4F6),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          '${widget.members.length}',
-                          style: const TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            color: AppTheme.textSecondary,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const Text(
-                    'Batas tim: 10',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: AppTheme.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              if (widget.members.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 12),
-                  child: Text(
-                    'Belum ada anggota.',
-                    style: TextStyle(color: AppTheme.textSecondary),
-                  ),
-                ),
-              ...widget.members.map((member) {
-                final isOwner = member.role == MemberRole.owner;
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 18,
-                        backgroundColor: AppTheme.textPrimary,
-                        child: Text(
-                          member.initials,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              member.name,
-                              style: const TextStyle(
-                                color: AppTheme.textPrimary,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 14,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      _RoleChip(role: member.role),
-                      if (!isOwner) ...[
-                        const SizedBox(width: 4),
-                        IconButton(
-                          icon: const Icon(Icons.more_vert,
-                              size: 18, color: AppTheme.textSecondary),
-                          onPressed: () {
-                            // Fungsi aksi pengelolaan akses anggota tim
-                          },
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                        ),
-                      ],
-                    ],
-                  ),
-                );
-              }),
             ],
           ),
-        ),
-      ],
+          const SizedBox(height: 20),
+
+          // 3. Dark Code Display Card (bg-ink)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+            decoration: BoxDecoration(
+              color: AppTheme.ink,
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: const [AppTheme.shadowCard],
+            ),
+            child: Column(
+              children: const [
+                Text(
+                  'WORKSPACE CODE',
+                  style: TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white54,
+                      letterSpacing: 1.8),
+                ),
+                SizedBox(height: 12),
+                Text(
+                  inviteCode,
+                  style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                      letterSpacing: 6.0),
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'Codes are unique to each workspace.',
+                  style: TextStyle(fontSize: 9, color: Colors.white54),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // 4. Dual Action Buttons (Copy & Regenerate)
+          Row(
+            children: [
+              Expanded(
+                child: _buildActionButton(
+                  icon: Icons.copy_rounded,
+                  label: 'Copy code',
+                  onPressed: () {},
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _buildActionButton(
+                  icon: Icons.refresh_rounded,
+                  label: 'New code',
+                  onPressed: () {},
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // 5. Access Info Box Card (White Box Style)
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: const [AppTheme.shadowSoft],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: const BoxDecoration(
+                      color: AppTheme.surface, shape: BoxShape.circle),
+                  child: const Icon(Icons.person_add_alt_1_rounded,
+                      color: AppTheme.muted, size: 16),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: const [
+                      Text('Invite as member',
+                          style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: AppTheme.ink)),
+                      SizedBox(height: 2),
+                      Text('New people can view, create, and edit memos.',
+                          style: TextStyle(fontSize: 9, color: AppTheme.faint)),
+                    ],
+                  ),
+                )
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // 6. Bottom Done Button
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: ElevatedButton(
+              onPressed: () => Navigator.pop(context),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.ink,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(24)),
+              ),
+              child: const Text('Done',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+            ),
+          ),
+        ],
+      ),
     );
   }
-}
 
-class _RoleChip extends StatelessWidget {
-  final MemberRole role;
-  const _RoleChip({required this.role});
-  @override
-  Widget build(BuildContext context) {
-    final label = role == MemberRole.owner ? 'Pemilik' : 'Anggota';
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8F9FA),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-      ),
-      child: Text(
-        label,
-        style: const TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w500,
-          color: AppTheme.textPrimary,
+  Widget _buildActionButton(
+      {required IconData icon,
+      required String label,
+      required VoidCallback onPressed}) {
+    return SizedBox(
+      height: 44,
+      child: ElevatedButton.icon(
+        onPressed: onPressed,
+        icon: Icon(icon, size: 14, color: AppTheme.ink),
+        label: Text(label,
+            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.white,
+          foregroundColor: AppTheme.ink,
+          elevation: 0,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+          side: const BorderSide(color: AppTheme.line, width: 1),
         ),
       ),
     );

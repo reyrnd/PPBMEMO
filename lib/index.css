@@ -1,0 +1,111 @@
+/*
+ * Stylesheet prototipe React; tema aktif aplikasi Flutter berada di core/app_theme.dart.
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap");
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  --color-page: #ded9cd;
+  --color-canvas: #f0ede4;
+  --color-ink: #2a2926;
+  --color-muted: #5c5750;
+  --color-faint: #9a948a;
+  --color-line: #e2ddd0;
+  --color-soft: #e8e3d8;
+  --color-surface: #f7f5ef;
+  --color-caramel: #b76d42;
+  --color-danger: #a94335;
+  --color-danger-soft: #f3d8d2;
+  --color-olive: #687157;
+  --color-plum: #75647d;
+  --color-peach: #f2ded0;
+  --color-mint: #dce4d5;
+  --color-lilac: #e4dce7;
+  --shadow-soft: 0 4px 18px rgba(42, 41, 38, 0.055);
+  --shadow-card: 0 14px 30px rgba(42, 41, 38, 0.12);
+  --shadow-nav: 0 16px 35px rgba(42, 41, 38, 0.24);
+  --shadow-phone: 0 30px 80px rgba(42, 41, 38, 0.18);
+}
+
+@layer base {
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    min-width: 320px;
+    min-height: 100vh;
+  }
+}
+
+.app-shell {
+  width: 100%;
+  max-width: 390px;
+}
+
+.status-bar {
+  height: 24px;
+}
+
+.app-scroll {
+  scrollbar-width: none;
+}
+
+.app-scroll::-webkit-scrollbar,
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+.scrollbar-none {
+  scrollbar-width: none;
+}
+
+.canvas-grid {
+  background-image: radial-gradient(rgba(92, 87, 80, 0.16) 1px, transparent 1px);
+  background-size: 18px 18px;
+}
+
+@layer components {
+  .memo-editor p + p {
+    margin-top: 0.9rem;
+  }
+
+  .memo-editor strong {
+    font-weight: 800;
+    color: var(--color-ink);
+  }
+
+  .memo-editor ul {
+    margin-top: 0.75rem;
+    padding-left: 1.25rem;
+    list-style: disc;
+  }
+
+  .memo-editor blockquote {
+    margin-top: 0.75rem;
+    padding-left: 0.9rem;
+    border-left: 2px solid var(--color-line);
+    color: var(--color-ink);
+    font-weight: 600;
+  }
+}
+
+@media (min-width: 500px) {
+  .app-shell {
+    min-height: 844px;
+    margin-top: 24px;
+    margin-bottom: 24px;
+    border-radius: 36px;
+  }
+
+  .app-scroll {
+    height: 820px;
+  }
+}
+
+@media (max-width: 499px) {
+  .app-shell {
+    max-width: none;
+  }
+}
+*/

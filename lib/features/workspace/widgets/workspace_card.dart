@@ -55,7 +55,7 @@ class WorkspaceCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              AvatarStack(workspace.memberInitials),
+              AvatarStack(members: workspace.members),
               Text(DateFormatter.getRelativeTimeText(workspace.updatedAt),
                   style: const TextStyle(fontSize: 10, color: Colors.black38)),
             ],

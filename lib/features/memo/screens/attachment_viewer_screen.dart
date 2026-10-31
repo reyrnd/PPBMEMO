@@ -1,164 +1,155 @@
 import 'package:flutter/material.dart';
-import 'package:memospace/core/app_theme.dart';
-import 'package:memospace/features/memo/models/attachment.dart';
+import '../../../core/app_theme.dart';
 
-class AttachmentViewerScreen extends StatefulWidget {
-  final Attachment attachment;
-  final VoidCallback? onDownload;
-
-  const AttachmentViewerScreen({
-    super.key,
-    required this.attachment,
-    this.onDownload,
-  });
-
-  @override
-  State<AttachmentViewerScreen> createState() => _AttachmentViewerScreenState();
-}
-
-class _AttachmentViewerScreenState extends State<AttachmentViewerScreen> {
-  var _isPlaying = false;
+class AttachmentViewerScreen extends StatelessWidget {
+  const AttachmentViewerScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
+    // Simulasi data meta file dari berkas TSX (Contoh kasus pratinjau Video/Photo)
+    const String fileName = 'Workshop whiteboard.jpg';
+    const String fileTypeInfo = 'Photo · 2.4 MB';
+    const bool isVideo = false;
+
     return Scaffold(
-      backgroundColor: AppTheme.viewerBackground,
-      appBar: AppBar(
-        backgroundColor: AppTheme.viewerBackground,
-        foregroundColor: AppTheme.viewerForeground,
-        title: Text(
-          widget.attachment.name,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(color: AppTheme.viewerForeground),
-        ),
-        actions: [
-          IconButton(
-            tooltip: 'Unduh berkas',
-            onPressed: widget.onDownload,
-            icon: const Icon(Icons.download_outlined),
-          ),
-        ],
-      ),
+      backgroundColor: AppTheme.canvas,
+      appBar: _buildAppBar(context, fileName, fileTypeInfo),
       body: SafeArea(
-        top: false,
-        child: Center(child: _buildContent()),
-      ),
-    );
-  }
-
-  Widget _buildContent() {
-    return switch (widget.attachment.type) {
-      AttachmentType.photo => InteractiveViewer(
-          minScale: 0.5,
-          maxScale: 4,
-          child: const _Placeholder(
-            icon: Icons.image_outlined,
-            label: 'Pratinjau foto',
-          ),
-        ),
-      AttachmentType.document => _buildDocumentPlaceholder(),
-      AttachmentType.video => _buildVideoPlaceholder(),
-    };
-  }
-
-  Widget _buildDocumentPlaceholder() {
-    final pageCount = widget.attachment.pageCount ?? 12;
-    final currentPage = pageCount >= 3 ? 3 : pageCount;
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const Expanded(
-          child: Center(
-            child: _Placeholder(
-              icon: Icons.picture_as_pdf_outlined,
-              label: 'Pratinjau PDF',
-            ),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.only(bottom: 24),
-          child: Text(
-            '$currentPage / $pageCount',
-            style: const TextStyle(
-              color: AppTheme.viewerForeground,
-              fontSize: 14,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildVideoPlaceholder() {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        IconButton(
-          tooltip: _isPlaying ? 'Jeda video' : 'Putar video',
-          onPressed: () => setState(() => _isPlaying = !_isPlaying),
-          iconSize: 72,
-          color: AppTheme.viewerForeground,
-          icon: Icon(_isPlaying ? Icons.pause_circle : Icons.play_circle),
-        ),
-        const SizedBox(height: 24),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Row(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                '0:14',
-                style: TextStyle(color: AppTheme.viewerForeground),
-              ),
-              const SizedBox(width: 12),
-              const Expanded(
-                child: LinearProgressIndicator(
-                  value: 0.35,
-                  backgroundColor: AppTheme.textSecondary,
-                  valueColor:
-                      AlwaysStoppedAnimation<Color>(AppTheme.viewerForeground),
+              const SizedBox(height: 12),
+
+              // 1. Dark Asset Media Viewer Container (bg-ink)
+              Container(
+                width: double.infinity,
+                height: 288, // Setara h-72 di Tailwind
+                decoration: BoxDecoration(
+                  color: AppTheme.ink,
+                  borderRadius: BorderRadius.circular(28),
+                  boxShadow: const [AppTheme.shadowCard],
+                ),
+                alignment: Alignment.center,
+                child: Icon(
+                  // Hapus modifier const di atas, pindahkan ke widget Icon jika diperlukan
+                  isVideo ? Icons.videocam_outlined : Icons.image_outlined,
+                  size: 48,
+                  color: Colors.white,
+                  // Baris strokeWidth: 1.4, SUDAH DIHAPUS agar tidak error lagi
                 ),
               ),
-              const SizedBox(width: 12),
-              Text(
-                _formatDuration(widget.attachment.durationSeconds ?? 42),
-                style: const TextStyle(color: AppTheme.viewerForeground),
-              ),
+              const SizedBox(height: 16),
+
+              // 2. File Details Card Section
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppTheme.whiteBackgroundField,
+                  borderRadius: BorderRadius.circular(22),
+                  boxShadow: const [AppTheme.shadowSoft],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'File details',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.ink,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Grid Info 2 baris (Sesuai struktur TSX)
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: const [
+                              Text('Added',
+                                  style: TextStyle(
+                                      fontSize: 10, color: AppTheme.faint)),
+                              SizedBox(height: 4),
+                              Text('May 24, 2025',
+                                  style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppTheme.ink)),
+                            ],
+                          ),
+                        ),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: const [
+                              Text('Workspace',
+                                  style: TextStyle(
+                                      fontSize: 10, color: AppTheme.faint)),
+                              SizedBox(height: 4),
+                              Text('Northstar Studio',
+                                  style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppTheme.ink)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    )
+                  ],
+                ),
+              )
             ],
           ),
         ),
-      ],
+      ),
     );
   }
 
-  String _formatDuration(int seconds) {
-    final minutes = seconds ~/ 60;
-    final remainingSeconds = seconds % 60;
-    return '$minutes:${remainingSeconds.toString().padLeft(2, '0')}';
-  }
-}
+  // ---------------------------------------------------------------------------
+  // Sub-Widgets / Component Slicing
+  // ---------------------------------------------------------------------------
 
-class _Placeholder extends StatelessWidget {
-  final IconData icon;
-  final String label;
-
-  const _Placeholder({
-    required this.icon,
-    required this.label,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 72, color: AppTheme.viewerForeground),
-        const SizedBox(height: 12),
-        Text(
-          label,
-          style: const TextStyle(color: AppTheme.viewerForeground),
+  PreferredSizeWidget _buildAppBar(
+      BuildContext context, String title, String subtitle) {
+    return AppBar(
+      backgroundColor: AppTheme.canvas,
+      elevation: 0,
+      leading: IconButton(
+        icon: const Icon(Icons.arrow_back_rounded, color: AppTheme.ink),
+        onPressed: () => Navigator.pop(context),
+      ),
+      title: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+                fontSize: 16, fontWeight: FontWeight.w800, color: AppTheme.ink),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            subtitle,
+            style: const TextStyle(
+                fontSize: 10,
+                color: AppTheme.muted,
+                fontWeight: FontWeight.w600),
+          ),
+        ],
+      ),
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.more_horiz_rounded, color: AppTheme.ink),
+          onPressed: () {},
         ),
+        const SizedBox(width: 8),
       ],
     );
   }

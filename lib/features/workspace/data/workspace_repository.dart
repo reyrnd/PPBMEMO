@@ -6,7 +6,26 @@ import 'package:rxdart/rxdart.dart';
 
 class WorkspaceRepository {
   final _db = FirebaseFirestore.instance;
-  User get _user => FirebaseAuth.instance.currentUser!;
+
+  /// Mengembalikan user yang sedang login secara async.
+  /// Aman dipakai meski auth state Firebase belum selesai di-restore
+  /// (currentUser bisa null sesaat setelah app restart walaupun user sudah login).
+  Future<User> _getUser() async {
+    // Coba ambil langsung dulu (biasanya sudah tersedia)
+    User? u = FirebaseAuth.instance.currentUser;
+    if (u != null) return u;
+
+    // Jika null, tunggu event pertama dari auth stream (max 5 detik)
+    u = await FirebaseAuth.instance
+        .authStateChanges()
+        .first
+        .timeout(const Duration(seconds: 5), onTimeout: () => null);
+
+    if (u == null) {
+      throw Exception('Sesi login tidak ditemukan. Silakan masuk kembali.');
+    }
+    return u;
+  }
 
   String _initials(String? name) {
     final p =
@@ -22,9 +41,12 @@ class WorkspaceRepository {
             .collection('workspaces')
             .where('memberIds', arrayContains: user.uid)
             .snapshots()
-            .map((s) =>
-                s.docs.map((d) => Workspace.fromDoc(d, user.uid)).toList()
-                  ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt)));
+            .map((s) => s.docs
+                // Filter dokumen yang datanya masih null (pending server write)
+                .where((d) => d.data() != null && d.data()!['title'] != null)
+                .map((d) => Workspace.fromDoc(d, user.uid))
+                .toList()
+              ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt)));
       });
 
   Future<void> create({
@@ -33,7 +55,7 @@ class WorkspaceRepository {
     required String category,
     bool pin = false,
   }) async {
-    final u = _user;
+    final u = await _getUser();
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     final code =
         List.generate(6, (_) => chars[Random().nextInt(chars.length)]).join();
@@ -58,18 +80,35 @@ class WorkspaceRepository {
     });
     batch.set(_db.collection('invites').doc(code), {'workspaceId': ref.id});
     await batch.commit();
+    // _writeActivity tidak boleh membatalkan operasi utama
+    // karena rules Firestore activities bisa race dengan dokumen workspace baru
+    try {
+      await _writeActivity(
+        workspaceId: ref.id,
+        type: 'workspace_created',
+        targetTitle: title,
+      );
+    } catch (_) {}
   }
 
   Future<void> joinByCode(String code) async {
-    final u = _user;
+    final u = await _getUser();
     final invite =
         await _db.collection('invites').doc(code.trim().toUpperCase()).get();
     if (!invite.exists) throw Exception('Kode undangan tidak ditemukan.');
-    await _db.collection('workspaces').doc(invite['workspaceId']).update({
+    final workspaceId = invite['workspaceId'] as String;
+    await _db.collection('workspaces').doc(workspaceId).update({
       'memberIds': FieldValue.arrayUnion([u.uid]),
       'members.${u.uid}': {'name': u.displayName ?? '', 'role': 'member'},
       'memberInitials': FieldValue.arrayUnion([_initials(u.displayName)]),
     });
+    try {
+      await _writeActivity(
+        workspaceId: workspaceId,
+        type: 'member_joined',
+        targetTitle: u.displayName ?? 'Anggota baru',
+      );
+    } catch (_) {}
   }
 
   Future<void> inviteByEmail(String workspaceId, String email) async {
@@ -110,21 +149,23 @@ class WorkspaceRepository {
     });
   }
 
-  Future<void> togglePin(String id, bool pin) =>
-      _db.collection('workspaces').doc(id).update({
-        'pinnedBy': pin
-            ? FieldValue.arrayUnion([_user.uid])
-            : FieldValue.arrayRemove([_user.uid]),
-      });
+  Future<void> togglePin(String id, bool pin) async {
+    final u = await _getUser();
+    await _db.collection('workspaces').doc(id).update({
+      'pinnedBy': pin
+          ? FieldValue.arrayUnion([u.uid])
+          : FieldValue.arrayRemove([u.uid]),
+    });
+  }
 
   Future<void> rename(String id, String title) =>
       _db.collection('workspaces').doc(id).update({'title': title});
 
-  Future<void> leave(String id) {
-    final uid = FirebaseAuth.instance.currentUser!.uid;
-    return _db.collection('workspaces').doc(id).update({
-      'memberIds': FieldValue.arrayRemove([uid]),
-      'members.$uid': FieldValue.delete(),
+  Future<void> leave(String id) async {
+    final u = await _getUser();
+    await _db.collection('workspaces').doc(id).update({
+      'memberIds': FieldValue.arrayRemove([u.uid]),
+      'members.${u.uid}': FieldValue.delete(),
     });
   }
 
@@ -142,5 +183,25 @@ class WorkspaceRepository {
       await a.reference.delete();
     }
     await ref.delete();
+  }
+
+  Future<void> _writeActivity({
+    required String workspaceId,
+    required String type,
+    required String targetTitle,
+  }) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    await _db
+        .collection('workspaces')
+        .doc(workspaceId)
+        .collection('activities')
+        .add({
+      'type': type,
+      'targetTitle': targetTitle,
+      'actorId': user.uid,
+      'actorName': user.displayName ?? '',
+      'createdAt': FieldValue.serverTimestamp(),
+    });
   }
 }

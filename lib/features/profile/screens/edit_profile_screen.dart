@@ -77,9 +77,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppTheme.canvas,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: AppTheme.canvas,
         elevation: 0,
         scrolledUnderElevation: 0,
         leading: IconButton(
@@ -115,7 +115,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                             children: [
                               CircleAvatar(
                                 radius: 52,
-                                backgroundColor: AppTheme.textPrimary,
+                                backgroundColor: AppTheme.ink,
                                 child: Text(
                                   widget.user.initials,
                                   style: const TextStyle(
@@ -176,12 +176,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       textCapitalization: TextCapitalization.words,
                       validator: (value) => Validators.required(value, 'Nama'),
                       style: const TextStyle(
-                          color: AppTheme.textPrimary, fontSize: 15),
+                          color: AppTheme.ink,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600),
                       decoration: _inputDecoration().copyWith(
                         suffixIcon: _nameController.text.isNotEmpty
                             ? IconButton(
                                 icon: const Icon(Icons.cancel_outlined,
-                                    color: Colors.black38, size: 20),
+                                    color: AppTheme.faint, size: 20),
                                 onPressed: () => _nameController.clear(),
                               )
                             : null,
@@ -213,11 +215,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       controller: _emailController,
                       readOnly: true,
                       enabled: false,
-                      style:
-                          const TextStyle(color: Colors.black45, fontSize: 15),
+                      style: const TextStyle(
+                          color: AppTheme.muted,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600),
                       decoration: _inputDecoration().copyWith(
                         suffixIcon: const Icon(Icons.verified_outlined,
-                            color: Colors.black38, size: 18),
+                            color: AppTheme.faint, size: 18),
                       ),
                     ),
                     const SizedBox(height: 20),
@@ -232,8 +236,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       maxLines: 5,
                       maxLength: 200,
                       style: const TextStyle(
-                          color: AppTheme.textPrimary,
+                          color: AppTheme.ink,
                           fontSize: 15,
+                          fontWeight: FontWeight.w600,
                           height: 1.4),
                       decoration: _inputDecoration(
                         hintText: 'Jelaskan diri Anda secara singkat...',
@@ -274,8 +279,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF3F4F6),
+                        color: AppTheme.surface,
                         borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: AppTheme.line),
                       ),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -307,7 +313,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               child: ElevatedButton(
                 onPressed: _isSaving ? null : _saveChanges,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.textPrimary,
+                  backgroundColor: AppTheme.ink,
                   foregroundColor: Colors.white,
                   minimumSize: const Size(double.infinity, 56),
                   shape: const StadiumBorder(),
@@ -347,18 +353,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   InputDecoration _inputDecoration({String? hintText}) {
     return InputDecoration(
       hintText: hintText,
-      hintStyle: const TextStyle(color: Colors.black38, fontSize: 14),
+      hintStyle: const TextStyle(
+          color: AppTheme.faint, fontSize: 14, fontWeight: FontWeight.w600),
       filled: true,
-      fillColor: const Color(
-          0xFFF3F4F6), // Seragam dengan kolom input beranda & kode baru
+      fillColor: AppTheme.surface,
       contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16),
-        borderSide: BorderSide.none,
+        borderSide: const BorderSide(color: AppTheme.line),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16),
-        borderSide: BorderSide.none,
+        borderSide: const BorderSide(color: AppTheme.line),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16),

@@ -45,6 +45,29 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
     setState(() {});
   }
 
+  Future<void> _sendPasswordResetEmail() async {
+    final email = FirebaseAuth.instance.currentUser?.email;
+    if (email == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Email akun tidak tersedia.')),
+      );
+      return;
+    }
+    try {
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Tautan pemulihan dikirim ke $email.')),
+      );
+    } on FirebaseAuthException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text('Email pemulihan gagal dikirim: ${error.message}')),
+      );
+    }
+  }
+
   Future<void> _save() async {
     if (!_formKey.currentState!.validate() || _isSaving) return;
 
@@ -110,9 +133,9 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
     final hasNumber = RegExp(r'\d').hasMatch(password);
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppTheme.canvas,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: AppTheme.canvas,
         elevation: 0,
         scrolledUnderElevation: 0,
         leading: IconButton(
@@ -143,8 +166,9 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                     Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF3F4F6),
+                        color: AppTheme.surface,
                         borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: AppTheme.line),
                       ),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -173,9 +197,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                       children: [
                         const _FieldLabel('Kata sandi lama'),
                         GestureDetector(
-                          onTap: () {
-                            // Tambahkan aksi navigasi atau fungsi lupa sandi di sini
-                          },
+                          onTap: _sendPasswordResetEmail,
                           child: const Text(
                             'Lupa kata sandi?',
                             style: TextStyle(
@@ -218,8 +240,9 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF3F4F6),
+                        color: AppTheme.surface,
                         borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: AppTheme.line),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -229,7 +252,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                             style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.bold,
-                              color: Colors.black45,
+                              color: AppTheme.muted,
                               letterSpacing: 0.5,
                             ),
                           ),
@@ -341,10 +364,12 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
       controller: controller,
       obscureText: obscureText,
       validator: validator,
-      style: const TextStyle(color: AppTheme.textPrimary, fontSize: 15),
+      style: const TextStyle(
+          color: AppTheme.ink, fontSize: 15, fontWeight: FontWeight.w600),
       decoration: InputDecoration(
         hintText: hintText,
-        hintStyle: const TextStyle(color: Colors.black38, fontSize: 14),
+        hintStyle: const TextStyle(
+            color: AppTheme.faint, fontSize: 14, fontWeight: FontWeight.w600),
         suffixIcon: IconButton(
           tooltip: obscureText ? 'Lihat kata sandi' : 'Sembunyikan kata sandi',
           onPressed: onToggleVisibility,
@@ -352,22 +377,21 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
             obscureText
                 ? Icons.visibility_outlined
                 : Icons.visibility_off_outlined,
-            color: Colors.black45,
+            color: AppTheme.muted,
             size: 20,
           ),
         ),
         filled: true,
-        fillColor:
-            const Color(0xFFF3F4F6), // Seragam tanpa garis border kaku luar
+        fillColor: AppTheme.surface,
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide.none,
+          borderSide: const BorderSide(color: AppTheme.line),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide.none,
+          borderSide: const BorderSide(color: AppTheme.line),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),

@@ -18,28 +18,33 @@ class _HelpScreenState extends State<HelpScreen> {
   final List<Map<String, String>> _faqs = [
     {
       'question': 'Bagaimana cara mengundang anggota ke workspace?',
+      'category': 'Workspace',
       'answer':
           'Buka menu Detail Workspace, ketuk tombol \'Undang Anggota\', lalu masukkan alamat email rekan kelompok atau bagikan 6 digit kode unik workspace.',
     },
     {
       'question': 'Apakah catatan dapat diedit bersama secara real-time?',
+      'category': 'Memo',
       'answer':
           'Ya, seluruh catatan di MemoSpace mendukung kolaborasi multi-pengguna secara real-time dengan sinkronisasi instan otomatis.',
     },
     {
       'question':
           'Bagaimana cara menyematkan lampiran berkas atau gambar pada memo?',
+      'category': 'Memo',
       'answer':
           'Saat mengedit memo, gunakan ikon klip kertas di bilah alat bawah untuk memilih berkas dokumen atau gambar dari penyimpanan lokal Anda.',
     },
     {
       'question':
           'Berapa kapasitas maksimal penyimpanan berkas di satu workspace?',
+      'category': 'Workspace',
       'answer':
           'Kapasitas penyimpanan dasar berkas untuk satu workspace standar adalah hingga 100 MB per ruang kerja bersama.',
     },
     {
       'question': 'Bagaimana cara mengubah izin akses peran anggota tim?',
+      'category': 'Workspace',
       'answer':
           'Hanya pemilik workspace yang dapat mengubah peran anggota dari Menu Anggota di dalam pengaturan kelola ruang kerja.',
     },
@@ -50,17 +55,34 @@ class _HelpScreenState extends State<HelpScreen> {
   final List<String> _categories = [
     'Semua Topik',
     'Workspace',
-    'Kolaborasi',
-    'Penyimpanan'
+    'Memo',
   ];
+  final TextEditingController _searchController = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final query = _searchController.text.trim().toLowerCase();
+    final selectedCategory = _categories[_selectedCategoryIndex];
+    final visibleFaqs = _faqs.where((faq) {
+      final matchesCategory = selectedCategory == 'Semua Topik' ||
+          faq['category'] == selectedCategory;
+      final matchesQuery = query.isEmpty ||
+          faq['question']!.toLowerCase().contains(query) ||
+          faq['answer']!.toLowerCase().contains(query);
+      return matchesCategory && matchesQuery;
+    }).toList();
+
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppTheme.canvas,
       // --- 1. APP BAR CLEAN SETUP ---
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: AppTheme.canvas,
         elevation: 0,
         scrolledUnderElevation: 0,
         leading: IconButton(
@@ -83,27 +105,34 @@ class _HelpScreenState extends State<HelpScreen> {
           children: [
             // --- 2. SEARCH BAR ---
             TextFormField(
-              style: const TextStyle(color: AppTheme.textPrimary, fontSize: 14),
+              controller: _searchController,
+              onChanged: (_) => setState(() {}),
+              style: const TextStyle(
+                  color: AppTheme.ink,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600),
               decoration: InputDecoration(
                 hintText: 'Cari pertanyaan bantuan...',
-                hintStyle: const TextStyle(color: Colors.black38, fontSize: 14),
+                hintStyle: const TextStyle(
+                    color: AppTheme.faint,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600),
                 prefixIcon:
-                    const Icon(Icons.search, color: Colors.black38, size: 20),
+                    const Icon(Icons.search, color: AppTheme.muted, size: 20),
                 filled: true,
-                fillColor: const Color(0xFFF3F4F6),
+                fillColor: AppTheme.whiteBackgroundField,
                 contentPadding: const EdgeInsets.symmetric(vertical: 14),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(16),
-                  borderSide: BorderSide.none,
+                  borderSide: const BorderSide(color: AppTheme.line),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(16),
-                  borderSide: BorderSide.none,
+                  borderSide: const BorderSide(color: AppTheme.line),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(16),
-                  borderSide:
-                      const BorderSide(color: AppTheme.textPrimary, width: 1),
+                  borderSide: const BorderSide(color: AppTheme.ink, width: 1),
                 ),
               ),
             ),
@@ -127,9 +156,11 @@ class _HelpScreenState extends State<HelpScreen> {
                             horizontal: 16, vertical: 8),
                         decoration: BoxDecoration(
                           color: isSelected
-                              ? AppTheme.textPrimary
-                              : const Color(0xFFF3F4F6),
+                              ? AppTheme.ink
+                              : AppTheme.whiteBackgroundField,
                           borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                              color: isSelected ? AppTheme.ink : AppTheme.line),
                         ),
                         child: Center(
                           child: Text(
@@ -166,7 +197,7 @@ class _HelpScreenState extends State<HelpScreen> {
                   ),
                 ),
                 Text(
-                  '${_faqs.length} Pertanyaan',
+                  '${visibleFaqs.length} Pertanyaan',
                   style: const TextStyle(
                     fontSize: 12,
                     color: AppTheme.textSecondary,
@@ -178,13 +209,13 @@ class _HelpScreenState extends State<HelpScreen> {
 
             // --- 5. INDIVIDUAL FAQ LIST ---
             Column(
-              children: _faqs.map((faq) {
+              children: visibleFaqs.map((faq) {
                 return Container(
                   margin: const EdgeInsets.only(bottom: 12),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: AppTheme.whiteBackgroundField,
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFFE5E7EB)),
+                    border: Border.all(color: AppTheme.line),
                   ),
                   child: Theme(
                     data: Theme.of(context).copyWith(
@@ -225,9 +256,9 @@ class _HelpScreenState extends State<HelpScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: const Color(0xFFF8F9FA),
+                color: AppTheme.surface,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFE5E7EB)),
+                border: Border.all(color: AppTheme.line),
               ),
               child: Column(
                 children: [
@@ -237,7 +268,7 @@ class _HelpScreenState extends State<HelpScreen> {
                       Container(
                         padding: const EdgeInsets.all(8),
                         decoration: const BoxDecoration(
-                          color: Color(0xFFEBECEE),
+                          color: AppTheme.soft,
                           shape: BoxShape.circle,
                         ),
                         child: const Icon(
@@ -277,7 +308,7 @@ class _HelpScreenState extends State<HelpScreen> {
                   ElevatedButton(
                     onPressed: widget.onContactTeam,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.textPrimary,
+                      backgroundColor: AppTheme.ink,
                       foregroundColor: Colors.white,
                       minimumSize: const Size(double.infinity, 52),
                       shape: const StadiumBorder(),

@@ -30,6 +30,9 @@ class Workspace {
     this.ownerId = '',
   });
 
+  String get name => title;
+  int get memos => memoCount;
+
   Workspace copyWith({
     String? id,
     String? category,
@@ -42,6 +45,7 @@ class Workspace {
     List<String>? memberInitials,
     String? inviteCode,
     List<WorkspaceMember>? members,
+    String? ownerId,
   }) {
     return Workspace(
       id: id ?? this.id,
@@ -55,12 +59,24 @@ class Workspace {
       memberInitials: memberInitials ?? this.memberInitials,
       inviteCode: inviteCode ?? this.inviteCode,
       members: members ?? this.members,
+      ownerId: ownerId ?? this.ownerId,
     );
   }
 
   factory Workspace.fromDoc(
       DocumentSnapshot<Map<String, dynamic>> doc, String uid) {
-    final d = doc.data()!;
+    final d = doc.data();
+    // data() bisa null jika dokumen belum dikonfirmasi server (pending write)
+    if (d == null) {
+      return Workspace(
+        id: doc.id,
+        category: '',
+        title: '',
+        memoCount: 0,
+        fileCount: 0,
+        updatedAt: DateTime.now(),
+      );
+    }
     return Workspace(
       id: doc.id,
       category: d['category'] ?? '',

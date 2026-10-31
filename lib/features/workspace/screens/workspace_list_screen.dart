@@ -1,383 +1,498 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:memospace/core/app_theme.dart';
-import 'package:memospace/core/utils/date_formatter.dart';
-import 'package:memospace/core/widgets/memo_app_bar.dart';
-import 'package:memospace/features/workspace/cubit/workspace_cubit.dart';
-import 'package:memospace/features/workspace/models/workspace.dart';
-import 'package:memospace/features/workspace/screens/create_join_workspace_screen.dart';
-import 'package:memospace/features/workspace/screens/workspace_detail_screen.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../../../core/app_theme.dart';
+import '../../../core/utils/date_formatter.dart';
+import '../../../core/widgets/app_bottom_sheet.dart';
+import '../../../core/widgets/avatar_stack.dart';
+import '../../memo/cubit/memo_cubit.dart';
+import '../../search/screens/search_screen.dart';
+import '../cubit/workspace_cubit.dart';
+import '../models/workspace.dart';
+import 'workspace_detail_screen.dart';
 
-class WorkspaceListScreen extends StatefulWidget {
+class WorkspaceListScreen extends StatelessWidget {
   const WorkspaceListScreen({super.key});
 
   @override
-  State<WorkspaceListScreen> createState() => _WorkspaceListScreenState();
-}
-
-class _WorkspaceListScreenState extends State<WorkspaceListScreen> {
-  final _searchController = TextEditingController();
-  int _selectedFilterIndex = 0;
-
-  List<Workspace> get _filteredWorkspaces {
-    final query = _searchController.text.trim().toLowerCase();
-    final workspaces = context.watch<WorkspaceCubit>().state;
-    return workspaces.where((workspace) {
-      final matchesQuery = query.isEmpty ||
-          workspace.title.toLowerCase().contains(query) ||
-          workspace.category.toLowerCase().contains(query);
-      final matchesFilter = switch (_selectedFilterIndex) {
-        1 => workspace.hasPin,
-        _ => true,
-      };
-      return matchesQuery && matchesFilter;
-    }).toList();
-  }
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    context.watch<WorkspaceCubit>();
-    final workspaces = _filteredWorkspaces;
-    final pinnedWorkspaces =
-        workspaces.where((workspace) => workspace.hasPin).toList();
-    final otherWorkspaces =
-        workspaces.where((workspace) => !workspace.hasPin).toList();
-    final showPinnedSection = _selectedFilterIndex == 0;
-
-    return Scaffold(
-      backgroundColor: AppTheme.background,
-      appBar: const MemoAppBar(),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => CreateJoinWorkspaceScreen(
-                onCreate: (data) async {
-                  await context.read<WorkspaceCubit>().create(
-                        data.name,
-                        data.description,
-                        data.category,
-                        data.pinOnHome,
-                      );
-                  if (context.mounted) Navigator.pop(context);
-                },
-                onJoin: (code) async {
-                  try {
-                    await context.read<WorkspaceCubit>().join(code);
-                    if (context.mounted) Navigator.pop(context);
-                  } catch (error) {
-                    if (!context.mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(error.toString())),
-                    );
-                  }
-                },
-              ),
-            ),
-          );
-        },
-        backgroundColor: AppTheme.primary,
-        foregroundColor: AppTheme.background,
-        shape: const CircleBorder(),
-        child: const Icon(Icons.add, size: 28),
-      ),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 88),
-          children: [
-            const Text(
-              'Workspace',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: AppTheme.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 4),
-            const Text(
-              'Ruang kerja timmu',
-              style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
-            ),
-            const SizedBox(height: 18),
-            TextField(
-              controller: _searchController,
-              onChanged: (_) => setState(() {}),
-              decoration: AppTheme.pillInput(
-                hint: 'Cari workspace...',
-                prefixIcon: const Icon(
-                  Icons.search,
-                  color: AppTheme.textSecondary,
-                  size: 20,
-                ),
-                suffixIcon: _searchController.text.isEmpty
-                    ? null
-                    : IconButton(
-                        tooltip: 'Hapus pencarian',
-                        onPressed: () {
-                          _searchController.clear();
-                          setState(() {});
-                        },
-                        icon: const Icon(Icons.close),
+    return BlocBuilder<WorkspaceCubit, List<Workspace>>(
+      builder: (context, workspaces) {
+        return BlocBuilder<MemoCubit, MemoState>(
+          builder: (context, memoState) {
+            final allMemos =
+                memoState is MemoLoaded ? memoState.memos : const [];
+            final memoCount = allMemos.length;
+            final memberCount = workspaces.fold<int>(
+                0,
+                (total, workspace) =>
+                    total +
+                    (workspace.members.isEmpty ? 1 : workspace.members.length));
+            return Scaffold(
+              backgroundColor: AppTheme.canvas,
+              body: SafeArea(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 16),
+                      _header(context, workspaces.length),
+                      const SizedBox(height: 20),
+                      _actions(context),
+                      const SizedBox(height: 20),
+                      _stats(workspaces.length, memberCount, memoCount),
+                      const SizedBox(height: 28),
+                      const Text(
+                        'All workspaces',
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                          color: AppTheme.ink,
+                          letterSpacing: -0.2,
+                        ),
                       ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                _buildFilterPill('Semua', 0),
-                const SizedBox(width: 8),
-                _buildFilterPill('Disematkan', 1),
-                const SizedBox(width: 8),
-                _buildFilterPill('Milik saya', 2),
-              ],
-            ),
-            const SizedBox(height: 24),
-            if (workspaces.isEmpty)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 40),
-                child: Center(
-                  child: Text(
-                    'Workspace tidak ditemukan.',
-                    style: TextStyle(color: AppTheme.textSecondary),
+                      const SizedBox(height: 12),
+                      _workspaceList(context, workspaces),
+                      const SizedBox(height: 24),
+                    ],
                   ),
                 ),
-              )
-            else ...[
-              if (showPinnedSection && pinnedWorkspaces.isNotEmpty) ...[
-                _buildSectionHeading('DISEMATKAN', pinnedWorkspaces.length,
-                    icon: Icons.push_pin_outlined),
-                const SizedBox(height: 12),
-                for (final workspace in pinnedWorkspaces)
-                  _buildWorkspaceCard(workspace),
-                if (otherWorkspaces.isNotEmpty) const SizedBox(height: 16),
-              ],
-              if (otherWorkspaces.isNotEmpty || !showPinnedSection) ...[
-                _buildSectionHeading(
-                  _selectedFilterIndex == 1 ? 'DISEMATKAN' : 'SEMUA WORKSPACE',
-                  showPinnedSection
-                      ? otherWorkspaces.length
-                      : workspaces.length,
-                ),
-                const SizedBox(height: 12),
-                for (final workspace
-                    in showPinnedSection ? otherWorkspaces : workspaces)
-                  _buildWorkspaceCard(workspace),
-              ],
-            ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _header(BuildContext context, int workspaceCount) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '$workspaceCount ACTIVE SPACES',
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.5,
+                color: AppTheme.muted,
+              ),
+            ),
+            const SizedBox(height: 2),
+            const Text(
+              'Your workspaces',
+              style: TextStyle(
+                fontSize: 27,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.5,
+                color: AppTheme.ink,
+              ),
+            ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildFilterPill(String label, int index) {
-    final isActive = _selectedFilterIndex == index;
-    return ChoiceChip(
-      label: Text(label),
-      selected: isActive,
-      onSelected: (_) => setState(() => _selectedFilterIndex = index),
-      selectedColor: AppTheme.primary,
-      backgroundColor: AppTheme.editorToolbarBackground,
-      labelStyle: TextStyle(
-        fontSize: 13,
-        fontWeight: FontWeight.w600,
-        color: isActive ? AppTheme.background : AppTheme.textPrimary,
-      ),
-      shape: const StadiumBorder(),
-      side: BorderSide.none,
-      showCheckmark: false,
-    );
-  }
-
-  Widget _buildSectionHeading(String title, int count, {IconData? icon}) {
-    return Row(
-      children: [
-        if (icon != null) ...[
-          Icon(icon, size: 14, color: AppTheme.textSecondary),
-          const SizedBox(width: 4),
-        ],
-        Expanded(
-          child: Text(
-            title,
-            style: const TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.bold,
-              color: AppTheme.textSecondary,
-              letterSpacing: 0.5,
+        Row(
+          children: [
+            _iconButton(
+              icon: Icons.search_rounded,
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const SearchScreen()),
+              ),
             ),
-          ),
-        ),
-        Text(
-          '$count ruang',
-          style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary),
+            const SizedBox(width: 8),
+            _iconButton(
+              icon: Icons.notifications_none_rounded,
+              onTap: () => showNotificationsSheet(context: context),
+            ),
+          ],
         ),
       ],
     );
   }
 
-  Widget _buildWorkspaceCard(Workspace workspace) {
-    return GestureDetector(
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => WorkspaceDetailScreen(workspace: workspace),
-        ),
-      ),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: AppTheme.background,
-          border: Border.all(color: AppTheme.border),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: AppTheme.editorToolbarBackground,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    workspace.category,
-                    style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w500,
-                      color: AppTheme.textSecondary,
-                    ),
-                  ),
-                ),
-                Icon(
-                  workspace.hasPin ? Icons.push_pin : Icons.push_pin_outlined,
-                  size: 16,
-                  color: workspace.hasPin
-                      ? AppTheme.textPrimary
-                      : AppTheme.textSecondary,
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              workspace.title,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: AppTheme.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                _buildMemberAvatars(workspace.memberInitials),
-                const SizedBox(width: 6),
-                Text(
-                  '${workspace.memberInitials.length} anggota',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AppTheme.textSecondary,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            const Divider(height: 1, color: AppTheme.border),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                const Icon(
-                  Icons.description_outlined,
-                  size: 14,
-                  color: AppTheme.textSecondary,
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  '${workspace.memoCount} memo',
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: AppTheme.textSecondary,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                const Text(
-                  '•',
-                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 11),
-                ),
-                const SizedBox(width: 8),
-                const Icon(
-                  Icons.folder_open_outlined,
-                  size: 14,
-                  color: AppTheme.textSecondary,
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  '${workspace.fileCount} berkas',
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: AppTheme.textSecondary,
-                  ),
-                ),
-                const Spacer(),
-                Text(
-                  DateFormatter.getRelativeTimeText(workspace.updatedAt),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.end,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: AppTheme.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-          ],
+  Widget _iconButton({required IconData icon, required VoidCallback onTap}) {
+    return Material(
+      color: Colors.white,
+      shape: const CircleBorder(),
+      child: InkWell(
+        onTap: onTap,
+        customBorder: const CircleBorder(),
+        child: Container(
+          width: 40,
+          height: 40,
+          decoration: const BoxDecoration(
+            shape: BoxShape.circle,
+            boxShadow: [AppTheme.shadowSoft],
+          ),
+          child: Icon(icon, color: AppTheme.ink, size: 20),
         ),
       ),
     );
   }
 
-  Widget _buildMemberAvatars(List<String> initials) {
-    final visibleInitials = initials.take(3).toList();
-    return SizedBox(
-      width:
-          visibleInitials.isEmpty ? 0 : 24 + (visibleInitials.length - 1) * 16,
-      height: 24,
-      child: Stack(
-        children: [
-          for (var index = 0; index < visibleInitials.length; index++)
-            Positioned(
-              left: index * 16,
-              child: CircleAvatar(
-                radius: 12,
-                backgroundColor: AppTheme.background,
-                child: CircleAvatar(
-                  radius: 10,
-                  backgroundColor: AppTheme.surface,
-                  child: Text(
-                    visibleInitials[index],
-                    style: const TextStyle(
-                      fontSize: 8,
-                      fontWeight: FontWeight.bold,
-                      color: AppTheme.textPrimary,
-                    ),
-                  ),
+  Widget _actions(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: _actionCard(
+            context,
+            title: 'Create',
+            subtitle: 'New workspace',
+            icon: Icons.add_rounded,
+            dark: true,
+            onTap: () => showCreateWorkspaceSheet(context: context),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _actionCard(
+            context,
+            title: 'Join',
+            subtitle: 'Use invite code',
+            icon: Icons.login_rounded,
+            dark: false,
+            onTap: () => showJoinWorkspaceSheet(context: context),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _actionCard(
+    BuildContext context, {
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required bool dark,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: dark ? AppTheme.ink : Colors.white,
+      borderRadius: BorderRadius.circular(22),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(22),
+        child: Padding(
+          padding: const EdgeInsets.all(15),
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: dark
+                      ? Colors.white.withOpacity(0.12)
+                      : AppTheme.mint,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  icon,
+                  color: dark ? Colors.white : AppTheme.olive,
+                  size: 18,
                 ),
               ),
-            ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: dark ? Colors.white : AppTheme.ink,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      maxLines: 2,
+                      style: TextStyle(
+                        fontSize: 9,
+                        color: dark ? Colors.white60 : AppTheme.faint,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _stats(int workspaceCount, int memberCount, int memoCount) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: const [AppTheme.shadowSoft],
+      ),
+      child: Row(
+        children: [
+          _stat('$workspaceCount', 'Spaces'),
+          _divider(),
+          _stat('$memberCount', 'Members'),
+          _divider(),
+          _stat('$memoCount', 'Memos'),
         ],
+      ),
+    );
+  }
+
+  Widget _stat(String value, String label) {
+    return Expanded(
+      child: Column(
+        children: [
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w800,
+              color: AppTheme.ink,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label.toUpperCase(),
+            style: const TextStyle(
+              fontSize: 9,
+              fontWeight: FontWeight.w600,
+              color: AppTheme.faint,
+              letterSpacing: 0.5,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _divider() => Container(width: 1, height: 24, color: AppTheme.line);
+
+  Widget _emptyWorkspaceState(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: const [AppTheme.shadowSoft],
+      ),
+      child: Column(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: const BoxDecoration(
+              color: AppTheme.soft,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.groups_outlined,
+                size: 24, color: AppTheme.muted),
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'No workspaces yet',
+            style: TextStyle(
+              color: AppTheme.ink,
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Create a new space or join one with an invitation code.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: AppTheme.muted,
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton(
+            onPressed: () => showCreateWorkspaceSheet(context: context),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.ink,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+            ),
+            child: const Text('Create workspace',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _workspaceCards(
+      BuildContext context, List<Workspace> workspaces) {
+    if (workspaces.isEmpty) return [_emptyWorkspaceState(context)];
+    return workspaces.asMap().entries.map((entry) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: _workspaceCard(
+          context,
+          entry.value,
+          index: entry.key,
+        ),
+      );
+    }).toList();
+  }
+
+  Widget _workspaceList(BuildContext context, List<Workspace> workspaces) {
+    return Column(
+      children: _workspaceCards(context, workspaces),
+    );
+  }
+
+  Widget _workspaceCard(
+    BuildContext context,
+    Workspace workspace, {
+    required int index,
+  }) {
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    final role = workspace.ownerId == userId ? 'Owner' : 'Member';
+    final memoState = context.watch<MemoCubit>().state;
+    final liveMemoCount = memoState is MemoLoaded
+        ? memoState.memos.where((m) => m.workspaceId == workspace.id).length
+        : workspace.memoCount;
+    final liveMemberCount =
+        workspace.members.isEmpty ? 1 : workspace.members.length;
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(24),
+      child: InkWell(
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+              builder: (_) => WorkspaceDetailScreen(workspace: workspace)),
+        ),
+        borderRadius: BorderRadius.circular(24),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: index.isEven ? AppTheme.ink : AppTheme.mint,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Icon(
+                      Icons.grid_view_rounded,
+                      color: index.isEven ? Colors.white : AppTheme.olive,
+                      size: 19,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                workspace.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppTheme.ink,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            _roleBadge(role),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '$liveMemberCount members · $liveMemoCount memos',
+                          style: const TextStyle(
+                            fontSize: 10,
+                            color: AppTheme.faint,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(
+                    Icons.chevron_right_rounded,
+                    color: AppTheme.faint,
+                    size: 18,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Container(height: 1, color: AppTheme.line),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  AvatarStack(
+                    members: workspace.members,
+                    maxAvatars: 3,
+                    size: 26,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      workspace.description,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 10,
+                        color: AppTheme.muted,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Updated ${DateFormatter.getRelativeTimeText(workspace.updatedAt)}',
+                    style: const TextStyle(
+                      fontSize: 9,
+                      color: AppTheme.faint,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _roleBadge(String role) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        role.toUpperCase(),
+        style: const TextStyle(
+          fontSize: 8,
+          fontWeight: FontWeight.bold,
+          color: AppTheme.muted,
+          letterSpacing: 0.5,
+        ),
       ),
     );
   }

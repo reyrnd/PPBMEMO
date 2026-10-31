@@ -1,10 +1,8 @@
-import 'dart:async';
-
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-
-import '../../../core/app_routes.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../../core/app_theme.dart';
+import '../../auth/screens/login_screen.dart';
+import '../../shell/main_shell.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -17,98 +15,53 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
+    _navigateToNextScreen();
+  }
 
-    Timer(const Duration(milliseconds: 1500), () {
-      if (!mounted) return;
+  void _navigateToNextScreen() async {
+    // Efek visual splash
+    await Future.delayed(const Duration(seconds: 2));
+    if (!mounted) return;
 
-      final loggedIn = FirebaseAuth.instance.currentUser != null;
-      Navigator.pushReplacementNamed(
-          context, loggedIn ? AppRoutes.home : AppRoutes.login);
-    });
+    // Tunggu auth state Firebase selesai di-restore
+    final user = await FirebaseAuth.instance
+        .authStateChanges()
+        .first
+        .timeout(const Duration(seconds: 5), onTimeout: () => null);
+
+    if (!mounted) return;
+
+    // Jika sudah login → MainShell, belum login → LoginScreen
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (context) =>
+            user != null ? const MainShell() : const LoginScreen(),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-          child: Stack(
-        children: [
-          Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  width: 100,
-                  height: 100,
-                  child: Image.asset(
-                    'assets/images/MemoSpaceLogo.png',
-                    fit: BoxFit.contain,
-                  ),
-                ),
-                const Text(
-                  'MemoSpace',
-                  style: TextStyle(
-                    fontSize: 30,
-                    fontWeight: FontWeight.w500,
-                    color: AppTheme.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 5),
-                const Text(
-                  'Semua ide, satu ruang bersama.',
-                  style: TextStyle(
-                    fontSize: 15,
-                    color: AppTheme.textSecondary,
-                  ),
-                ),
-              ],
+    return const Scaffold(
+      backgroundColor: AppTheme.ink,
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 56),
+            SizedBox(height: 16),
+            Text(
+              'MemoSpace',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+                letterSpacing: -0.5,
+              ),
             ),
-          ),
-          Positioned(
-            bottom: 50,
-            left: 0,
-            right: 0,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SizedBox(
-                  width: 90,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: const LinearProgressIndicator(
-                      minHeight: 4,
-                      backgroundColor: AppTheme.border,
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        AppTheme.textPrimary,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16), // Jarak antara loading bar dan teks
-                const Text(
-                  'Memuat ruang kerja...',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w400,
-                    color: Color(
-                        0xFF75777C), // Menggunakan warna teks sekunder Anda
-                  ),
-                ),
-                const SizedBox(height: 4), // Jarak tipis ke teks versi
-                const Text(
-                  'v1.0.0',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w400,
-                    color: Color(
-                        0xFFC5C6CC), // Menggunakan warna abu-abu tipis untuk versi
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      )),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -2,7 +2,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:memospace/features/activity/models/activity.dart';
 import 'package:rxdart/rxdart.dart';
-import 'package:rxdart/transformers.dart';
 
 class ActivityRepository {
   final _db = FirebaseFirestore.instance;
@@ -19,7 +18,11 @@ class ActivityRepository {
           .limit(30)
           .snapshots()
           .map((snapshot) => snapshot.docs
-              .map((doc) => Activity.fromDoc(doc, workspaceName))
+              .map((doc) => Activity.fromDoc(
+                    doc,
+                    workspaceName,
+                    fallbackWorkspaceId: workspaceId,
+                  ))
               .toList());
 
   Stream<List<Activity>> watchAllMyActivities() =>
@@ -37,7 +40,11 @@ class ActivityRepository {
               .limit(30)
               .snapshots()
               .map((s) => s.docs
-                  .map((d) => Activity.fromDoc(d, w.data()['title'] ?? ''))
+                  .map((d) => Activity.fromDoc(
+                        d,
+                        w.data()['title'] ?? w.data()['name'] ?? '',
+                        fallbackWorkspaceId: w.id,
+                      ))
                   .toList()))).map((lists) => lists.expand((l) => l).toList()
             ..sort((a, b) => b.createdAt.compareTo(a.createdAt)));
         });

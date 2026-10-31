@@ -1,36 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:memospace/core/app_theme.dart';
-import 'package:memospace/features/memo/cubit/memo_cubit.dart';
-import 'package:memospace/features/memo/models/memo.dart';
-import 'package:memospace/features/memo/widgets/memo_card.dart';
-import 'package:memospace/features/workspace/cubit/workspace_cubit.dart';
-import 'package:memospace/features/workspace/models/workspace.dart';
-
-enum _SearchFilter { all, memo, workspace, file }
+import '../../../core/app_theme.dart';
+import '../../../core/utils/date_formatter.dart';
+import '../../memo/cubit/memo_cubit.dart';
+import '../../memo/models/memo.dart';
+import '../../memo/screens/memo_editor_screen.dart';
+import '../../workspace/cubit/workspace_cubit.dart';
+import '../../workspace/screens/workspace_detail_screen.dart';
 
 class SearchScreen extends StatefulWidget {
-  final ValueChanged<Memo>? onMemoTap;
-  final ValueChanged<Workspace>? onWorkspaceTap;
-  final ValueChanged<Memo>? onFileTap;
-
-  const SearchScreen({
-    super.key,
-    this.onMemoTap,
-    this.onWorkspaceTap,
-    this.onFileTap,
-  });
+  const SearchScreen({super.key});
 
   @override
   State<SearchScreen> createState() => _SearchScreenState();
 }
 
 class _SearchScreenState extends State<SearchScreen> {
-  final _searchController = TextEditingController();
-  final List<String> _recentSearches = [];
-  _SearchFilter _filter = _SearchFilter.all;
+  final TextEditingController _searchController = TextEditingController();
+  String _query = '';
+  String _selectedFilter = 'All';
 
-  String get _query => _searchController.text.trim().toLowerCase();
+  final List<String> _filters = const ['All', 'Memos', 'Workspaces', 'Files'];
 
   @override
   void dispose() {
@@ -38,431 +28,420 @@ class _SearchScreenState extends State<SearchScreen> {
     super.dispose();
   }
 
-  void _search(String value) {
-    final query = value.trim();
-    if (query.isEmpty) return;
-    setState(() {
-      _recentSearches.removeWhere(
-        (recent) => recent.toLowerCase() == query.toLowerCase(),
-      );
-      _recentSearches.insert(0, query);
-      if (_recentSearches.length > 8) _recentSearches.removeLast();
-    });
-    FocusScope.of(context).unfocus();
-  }
-
-  void _selectRecentSearch(String query) {
-    _searchController.text = query;
-    setState(() {});
-    _search(query);
-  }
-
-  List<Memo> get _memoResults {
-    if (_filter != _SearchFilter.all && _filter != _SearchFilter.memo) {
-      return const [];
-    }
-    final memos = context.watch<MemoCubit>().state;
-    return memos.where((memo) {
-      return _contains(memo.title) ||
-          _contains(memo.content) ||
-          _contains(memo.category) ||
-          _contains(memo.authorName);
-    }).toList();
-  }
-
-  List<Workspace> get _workspaceResults {
-    if (_filter != _SearchFilter.all && _filter != _SearchFilter.workspace) {
-      return const [];
-    }
-    final workspaces = context.watch<WorkspaceCubit>().state;
-    return workspaces.where((workspace) {
-      return _contains(workspace.title) || _contains(workspace.category);
-    }).toList();
-  }
-
-  List<({Memo memo, String fileName})> get _fileResults {
-    if (_filter != _SearchFilter.all && _filter != _SearchFilter.file) {
-      return const [];
-    }
-    final memos = context.watch<MemoCubit>().state;
-    return [
-      for (final memo in memos)
-        if (memo.fileName != null &&
-            (_matches(memo.fileName!) ||
-                _matches(memo.title) ||
-                _matches(memo.category)))
-          (memo: memo, fileName: memo.fileName!),
-    ];
-  }
-
-  bool _contains(String value) => value.toLowerCase().contains(_query);
-
-  bool _matches(String value) => value.toLowerCase().contains(_query);
-
   @override
   Widget build(BuildContext context) {
-    final hasQuery = _query.isNotEmpty;
-    final memos = hasQuery ? _memoResults : const <Memo>[];
-    final workspaces = hasQuery ? _workspaceResults : const <Workspace>[];
-    final files =
-        hasQuery ? _fileResults : const <({Memo memo, String fileName})>[];
-    final hasResults =
-        memos.isNotEmpty || workspaces.isNotEmpty || files.isNotEmpty;
+    final memoState = context.watch<MemoCubit>().state;
+    final allMemos = memoState is MemoLoaded ? memoState.memos : <Memo>[];
+    final allWorkspaces = context.watch<WorkspaceCubit>().state;
+
+    final q = _query.trim().toLowerCase();
+
+    final matchingMemos = allMemos.where((m) {
+      if (_selectedFilter == 'Workspaces') return false;
+      if (_selectedFilter == 'Files' && m.attachments.isEmpty) return false;
+      if (q.isEmpty) return true;
+      final inTitle = m.title.toLowerCase().contains(q);
+      final inContent = m.content.toLowerCase().contains(q);
+      final inTag = m.tag.toLowerCase().contains(q);
+      final inChecklist = m.checklistTitle.toLowerCase().contains(q) ||
+          m.checklist.any(
+            (c) => (c['text'] as String? ?? '').toLowerCase().contains(q),
+          );
+      final inAttachments = m.attachments.any(
+        (a) => (a['name'] as String? ?? '').toLowerCase().contains(q),
+      );
+      return inTitle || inContent || inTag || inChecklist || inAttachments;
+    }).toList();
+
+    final matchingWorkspaces = allWorkspaces.where((w) {
+      if (_selectedFilter == 'Memos' || _selectedFilter == 'Files') {
+        return false;
+      }
+      if (q.isEmpty) return true;
+      return w.name.toLowerCase().contains(q) ||
+          w.description.toLowerCase().contains(q) ||
+          w.inviteCode.toLowerCase().contains(q);
+    }).toList();
+
+    final totalResults = matchingMemos.length + matchingWorkspaces.length;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Pencarian'),
-      ),
+      backgroundColor: AppTheme.canvas,
+      appBar: _buildAppBar(),
       body: SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
-              child: TextField(
-                controller: _searchController,
-                autofocus: false,
-                textInputAction: TextInputAction.search,
-                onChanged: (_) => setState(() {}),
-                onSubmitted: _search,
-                decoration: AppTheme.pillInput(
-                  hint: 'Cari memo, workspace, atau berkas...',
-                  prefixIcon: const Icon(Icons.search),
-                  suffixIcon: _searchController.text.isEmpty
-                      ? null
-                      : IconButton(
-                          tooltip: 'Hapus pencarian',
-                          onPressed: () {
-                            _searchController.clear();
-                            setState(() {});
-                          },
-                          icon: const Icon(Icons.close),
-                        ),
-                ),
-              ),
-            ),
-            if (hasQuery) _buildFilterChips(),
-            Expanded(
-              child: hasQuery
-                  ? _buildSearchResults(
-                      memos: memos,
-                      workspaces: workspaces,
-                      files: files,
-                      hasResults: hasResults,
-                    )
-                  : _buildRecentSearches(),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildRecentSearches() {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-      children: [
-        Row(
-          children: [
-            const Expanded(
-              child: Text(
-                'Pencarian terakhir',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme.textPrimary,
-                ),
-              ),
-            ),
-            TextButton(
-              onPressed: () => setState(_recentSearches.clear),
-              child: const Text('Hapus semua'),
-            ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        if (_recentSearches.isEmpty)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 16),
-            child: Text(
-              'Belum ada pencarian.',
-              style: TextStyle(color: AppTheme.textSecondary),
-            ),
-          )
-        else
-          for (final query in _recentSearches)
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(
-                Icons.history,
-                color: AppTheme.textSecondary,
-              ),
-              title: Text(query),
-              trailing: IconButton(
-                tooltip: 'Hapus pencarian',
-                onPressed: () => setState(() => _recentSearches.remove(query)),
-                icon: const Icon(Icons.close, size: 18),
-              ),
-              onTap: () => _selectRecentSearch(query),
-            ),
-      ],
-    );
-  }
-
-  Widget _buildFilterChips() {
-    const filters = [
-      (filter: _SearchFilter.all, label: 'Semua'),
-      (filter: _SearchFilter.memo, label: 'Memo'),
-      (filter: _SearchFilter.workspace, label: 'Workspace'),
-      (filter: _SearchFilter.file, label: 'Berkas'),
-    ];
-
-    return SizedBox(
-      height: 46,
-      child: ListView.separated(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        scrollDirection: Axis.horizontal,
-        itemCount: filters.length,
-        separatorBuilder: (context, index) => const SizedBox(width: 8),
-        itemBuilder: (context, index) {
-          final item = filters[index];
-          final selected = _filter == item.filter;
-          return ChoiceChip(
-            label: Text(item.label),
-            selected: selected,
-            onSelected: (_) => setState(() => _filter = item.filter),
-            selectedColor: AppTheme.primary,
-            backgroundColor: AppTheme.editorToolbarBackground,
-            labelStyle: TextStyle(
-              color: selected ? AppTheme.background : AppTheme.textPrimary,
-              fontWeight: FontWeight.w500,
-            ),
-            shape: const StadiumBorder(),
-            side: BorderSide.none,
-            showCheckmark: false,
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildSearchResults({
-    required List<Memo> memos,
-    required List<Workspace> workspaces,
-    required List<({Memo memo, String fileName})> files,
-    required bool hasResults,
-  }) {
-    if (!hasResults) {
-      return const Center(
         child: Padding(
-          padding: EdgeInsets.all(24),
-          child: Text(
-            'Tidak ada hasil yang cocok.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: AppTheme.textSecondary),
+          padding: const EdgeInsets.symmetric(horizontal: 20.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 12),
+              _buildSearchInputBar(),
+              const SizedBox(height: 12),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: _filters.map((filter) {
+                    final active = _selectedFilter == filter;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: GestureDetector(
+                        onTap: () => setState(() => _selectedFilter = filter),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 7,
+                          ),
+                          decoration: BoxDecoration(
+                            color: active ? AppTheme.ink : Colors.white,
+                            borderRadius: BorderRadius.circular(20),
+                            boxShadow: active ? null : const [AppTheme.shadowSoft],
+                          ),
+                          child: Text(
+                            filter,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: active ? Colors.white : AppTheme.muted,
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+              const SizedBox(height: 18),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    q.isEmpty
+                        ? 'Recent memos & spaces'
+                        : 'Results for “$_query”',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: AppTheme.ink,
+                      letterSpacing: -0.2,
+                    ),
+                  ),
+                  Text(
+                    '$totalResults found',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.faint,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: totalResults == 0
+                    ? Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.search_off_rounded,
+                              size: 36,
+                              color: AppTheme.faint,
+                            ),
+                            const SizedBox(height: 10),
+                            Text(
+                              q.isEmpty
+                                  ? 'No memos or workspaces yet'
+                                  : 'No matches for "$_query"',
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: AppTheme.ink,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            const Text(
+                              'Try searching by memo title, checklist item, attachment name, or workspace.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: AppTheme.muted,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    : ListView(
+                        padding: const EdgeInsets.only(bottom: 24),
+                        children: [
+                          ...matchingWorkspaces.map((ws) {
+                            final wsMemos = allMemos
+                                .where((m) => m.workspaceId == ws.id)
+                                .length;
+                            return _buildResultTile(
+                              icon: Icons.grid_view_rounded,
+                              iconBg: AppTheme.mint,
+                              iconColor: AppTheme.olive,
+                              title: ws.name,
+                              subtitle:
+                                  'Workspace · ${ws.members.isEmpty ? 1 : ws.members.length} members · $wsMemos memos',
+                              badge: 'Space',
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        WorkspaceDetailScreen(workspace: ws),
+                                  ),
+                                );
+                              },
+                            );
+                          }),
+                          ...matchingMemos.map((memo) {
+                            final wsMatch = allWorkspaces
+                                .where((w) => w.id == memo.workspaceId)
+                                .toList();
+                            final wsName = wsMatch.isNotEmpty
+                                ? wsMatch.first.name
+                                : memo.tag;
+                            final hasFiles = memo.attachments.isNotEmpty;
+                            final hasChecklist = memo.checklist.isNotEmpty;
+                            return _buildResultTile(
+                              icon: hasFiles
+                                  ? Icons.attach_file_rounded
+                                  : hasChecklist
+                                      ? Icons.checklist_rounded
+                                      : Icons.description_rounded,
+                              iconBg: hasFiles
+                                  ? AppTheme.lilac
+                                  : hasChecklist
+                                      ? AppTheme.mint
+                                      : AppTheme.peach,
+                              iconColor: hasFiles
+                                  ? AppTheme.plum
+                                  : hasChecklist
+                                      ? AppTheme.olive
+                                      : AppTheme.caramel,
+                              title: memo.title.isEmpty
+                                  ? 'Untitled memo'
+                                  : memo.title,
+                              subtitle:
+                                  '$wsName · ${memo.preview.isEmpty ? DateFormatter.getRelativeTimeText(memo.updatedAt) : memo.preview}',
+                              badge: memo.tag,
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => MemoEditorScreen(
+                                      memoId: memo.id,
+                                      workspaceId: memo.workspaceId,
+                                    ),
+                                  ),
+                                );
+                              },
+                            );
+                          }),
+                        ],
+                      ),
+              ),
+            ],
           ),
         ),
-      );
-    }
-
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-      children: [
-        if (memos.isNotEmpty) ...[
-          _buildGroupTitle('Memo', memos.length),
-          const SizedBox(height: 10),
-          for (final memo in memos)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: InkWell(
-                onTap: widget.onMemoTap == null
-                    ? null
-                    : () => widget.onMemoTap!(memo),
-                borderRadius: BorderRadius.circular(16),
-                child: MemoCard(memo: memo),
-              ),
-            ),
-        ],
-        if (workspaces.isNotEmpty) ...[
-          _buildGroupTitle('Workspace', workspaces.length),
-          const SizedBox(height: 10),
-          for (final workspace in workspaces)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: _WorkspaceResultTile(
-                workspace: workspace,
-                onTap: widget.onWorkspaceTap == null
-                    ? null
-                    : () => widget.onWorkspaceTap!(workspace),
-              ),
-            ),
-        ],
-        if (files.isNotEmpty) ...[
-          _buildGroupTitle('Berkas', files.length),
-          const SizedBox(height: 10),
-          for (final file in files)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: _FileResultTile(
-                fileName: file.fileName,
-                memoTitle: file.memo.title,
-                onTap: widget.onFileTap == null
-                    ? null
-                    : () => widget.onFileTap!(file.memo),
-              ),
-            ),
-        ],
-      ],
+      ),
     );
   }
 
-  Widget _buildGroupTitle(String title, int count) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 8),
+  Widget _buildResultTile({
+    required IconData icon,
+    required Color iconBg,
+    required Color iconColor,
+    required String title,
+    required String subtitle,
+    required String badge,
+    required VoidCallback onTap,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: const [AppTheme.shadowSoft],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(22),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(14.0),
+            child: Row(
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: iconBg,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(
+                    icon,
+                    color: iconColor,
+                    size: 19,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: AppTheme.ink,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 10.5,
+                          color: AppTheme.muted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 9,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppTheme.surface,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    badge,
+                    style: const TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.muted,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  color: AppTheme.faint,
+                  size: 18,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  PreferredSizeWidget _buildAppBar() {
+    return AppBar(
+      backgroundColor: AppTheme.canvas,
+      elevation: 0,
+      leading: IconButton(
+        icon: const Icon(Icons.arrow_back_rounded, color: AppTheme.ink),
+        onPressed: () => Navigator.pop(context),
+      ),
+      title: const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Search MemoSpace',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              color: AppTheme.ink,
+            ),
+          ),
+          SizedBox(height: 2),
+          Text(
+            'Memos, checklists, files & workspaces',
+            style: TextStyle(
+              fontSize: 10,
+              color: AppTheme.muted,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSearchInputBar() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: const [AppTheme.shadowSoft],
+      ),
       child: Row(
         children: [
+          const Icon(Icons.search_rounded, color: AppTheme.muted, size: 18),
+          const SizedBox(width: 10),
           Expanded(
-            child: Text(
-              title,
+            child: TextField(
+              controller: _searchController,
+              autofocus: true,
               style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: AppTheme.textPrimary,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.ink,
+              ),
+              onChanged: (value) {
+                setState(() {
+                  _query = value;
+                });
+              },
+              decoration: const InputDecoration(
+                hintText: 'Search memos, checklists, files, or spaces...',
+                hintStyle: TextStyle(color: AppTheme.faint, fontSize: 12.5),
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                contentPadding:
+                    EdgeInsets.symmetric(horizontal: 4, vertical: 13),
               ),
             ),
           ),
-          Text(
-            '$count',
-            style: const TextStyle(
-              fontSize: 12,
-              color: AppTheme.textSecondary,
+          if (_query.isNotEmpty)
+            GestureDetector(
+              onTap: () {
+                _searchController.clear();
+                setState(() {
+                  _query = '';
+                });
+              },
+              child: Container(
+                width: 24,
+                height: 24,
+                decoration: const BoxDecoration(
+                  color: AppTheme.surface,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.close_rounded,
+                  color: AppTheme.muted,
+                  size: 14,
+                ),
+              ),
             ),
-          ),
         ],
-      ),
-    );
-  }
-}
-
-class _WorkspaceResultTile extends StatelessWidget {
-  final Workspace workspace;
-  final VoidCallback? onTap;
-
-  const _WorkspaceResultTile({
-    required this.workspace,
-    this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: AppTheme.background,
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            border: Border.all(color: AppTheme.border),
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Row(
-            children: [
-              const Icon(Icons.folder_outlined, color: AppTheme.textPrimary),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      workspace.title,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: AppTheme.textPrimary,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      workspace.category,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AppTheme.textSecondary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const Icon(Icons.chevron_right, color: AppTheme.textSecondary),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _FileResultTile extends StatelessWidget {
-  final String fileName;
-  final String memoTitle;
-  final VoidCallback? onTap;
-
-  const _FileResultTile({
-    required this.fileName,
-    required this.memoTitle,
-    this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: AppTheme.background,
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            border: Border.all(color: AppTheme.border),
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Row(
-            children: [
-              const Icon(
-                Icons.insert_drive_file_outlined,
-                color: AppTheme.textPrimary,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      fileName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: AppTheme.textPrimary,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      memoTitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AppTheme.textSecondary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const Icon(Icons.chevron_right, color: AppTheme.textSecondary),
-            ],
-          ),
-        ),
       ),
     );
   }

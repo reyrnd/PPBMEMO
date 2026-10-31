@@ -1,19 +1,14 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:memospace/core/app_routes.dart';
-import 'package:memospace/features/auth/models/app_user.dart';
-import 'package:memospace/features/auth/data/user_repository.dart';
-import 'package:memospace/features/memo/cubit/memo_cubit.dart';
-import 'package:memospace/features/notification/screens/notification_settings_screen.dart';
-import 'package:memospace/features/profile/screens/change_password_screen.dart';
-import 'package:memospace/features/profile/screens/edit_profile_screen.dart';
-import 'package:memospace/features/profile/screens/help_screen.dart';
-import 'package:memospace/features/profile/screens/language_screen.dart';
-import 'package:memospace/core/widgets/user_avatar.dart';
-import 'package:memospace/services/auth_service.dart';
-import 'package:memospace/features/workspace/cubit/workspace_cubit.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../../core/app_theme.dart';
+import '../../../core/widgets/app_bottom_sheet.dart';
+import '../../../services/auth_service.dart';
+import '../../auth/screens/login_screen.dart';
+import '../../memo/cubit/memo_cubit.dart';
+import '../../search/screens/search_screen.dart';
+import '../../workspace/cubit/workspace_cubit.dart';
+import '../../workspace/models/workspace.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -23,373 +18,485 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  late final Stream<AppUser?> _userStream;
+  String _language = 'English';
+  final _authService = AuthService();
 
-  @override
-  void initState() {
-    super.initState();
-    _userStream = UserRepository().watchMe();
+  String _getInitials(String name) {
+    final parts = name.trim().split(RegExp(r'\s+'));
+    if (parts.isEmpty || parts.first.isEmpty) return 'ME';
+    if (parts.length == 1) {
+      return parts.first.substring(0, parts.first.length.clamp(1, 2)).toUpperCase();
+    }
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+  }
+
+  Future<void> _logout() async {
+    await _authService.logout();
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      (route) => false,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final authUser = FirebaseAuth.instance.currentUser;
-    final workspaceCount = context.watch<WorkspaceCubit>().state.length;
-    final memoCount = context.watch<MemoCubit>().state.length;
+    final user = FirebaseAuth.instance.currentUser;
+    final userName = (user?.displayName != null && user!.displayName!.isNotEmpty)
+        ? user.displayName!
+        : 'Naya Anindita';
+    final userEmail = user?.email ?? 'naya@memospace.app';
+    final initials = _getInitials(userName);
 
-    return StreamBuilder<AppUser?>(
-      stream: _userStream,
-      builder: (context, snapshot) {
-        final storedUser = snapshot.data;
-        final user = AppUser(
-          id: storedUser?.id ?? authUser?.uid ?? '',
-          name: storedUser?.name.trim().isNotEmpty == true
-              ? storedUser!.name
-              : authUser?.displayName ?? 'Pengguna',
-          email: storedUser?.email.trim().isNotEmpty == true
-              ? storedUser!.email
-              : authUser?.email ?? '',
-          bio: storedUser?.bio,
-        );
+    return Scaffold(
+      backgroundColor: AppTheme.canvas,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 20.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 16),
+              // Header Akun & Pengaturan
+              _buildHeader(context),
+              const SizedBox(height: 20),
 
-        return Scaffold(
-          backgroundColor: Colors.white,
-          // --- 1. APP BAR ---
-          appBar: AppBar(
-            backgroundColor: Colors.white,
-            elevation: 0,
-            scrolledUnderElevation: 0,
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back, color: AppTheme.textPrimary),
-              onPressed: () {
-                Navigator.pop(context);
-              },
-            ),
-            title: const Text(
-              'Profil',
-              style: TextStyle(
-                color: AppTheme.textPrimary,
-                fontWeight: FontWeight.bold,
-                fontSize: 22,
+              // Main Profile Card (Dark/Ink Style Sesuai App.tsx)
+              _buildMainProfileCard(userName, userEmail, initials),
+              const SizedBox(height: 20),
+
+              // Statistics Info Bar
+              _buildStatsGrid(),
+              const SizedBox(height: 28),
+
+              // Preferences Section Title
+              const Text(
+                'Preferences',
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.ink,
+                  letterSpacing: -0.2,
+                ),
               ),
-            ),
-            // DIUBAH: Properti actions dihapus sepenuhnya di sini untuk menghilangkan tombol avatar redundan
-          ),
-          body: SafeArea(
-            child: SingleChildScrollView(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  const SizedBox(height: 16),
+              const SizedBox(height: 12),
 
-                  // --- 2. FOTO PROFIL DENGAN BADGE VERIFIKASI ---
-                  Stack(
-                    children: [
-                      UserAvatar(
-                          user.initials.isEmpty ? 'U' : user.initials, 45),
-                      Positioned(
-                        bottom: 0,
-                        right: 4,
-                        child: Container(
-                          padding: const EdgeInsets.all(2),
-                          decoration: const BoxDecoration(
-                            color: Colors.white,
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.check_circle,
-                            color: Color(0xFF22C55E),
-                            size: 20,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
+              // Menu List Container
+              _buildPreferencesMenu(context),
+              const SizedBox(height: 20),
 
-                  // --- 3. NAMA DAN EMAIL ---
-                  Text(
-                    user.name,
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: AppTheme.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    user.email,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: AppTheme.textSecondary,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // --- 4. TOMBOL EDIT PROFIL ---
-                  OutlinedButton.icon(
-                    onPressed: () => _openEditProfile(context, user),
-                    icon: const Icon(Icons.edit_outlined,
-                        size: 16, color: AppTheme.textPrimary),
-                    label: const Text(
-                      'Edit Profil',
-                      style: TextStyle(
-                          color: AppTheme.textPrimary,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 13),
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: Color(0xFFE5E7EB)),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20)),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 20, vertical: 10),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-
-                  // --- 5. GRID STATISTIK METER (WORKSPACE & MEMO) ---
-                  Row(
-                    children: [
-                      Expanded(
-                          child:
-                              _buildStatCard('$workspaceCount', 'Workspace')),
-                      const SizedBox(width: 16),
-                      Expanded(child: _buildStatCard('$memoCount', 'Memo')),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-
-                  // --- 6. GRUP MENU: AKUN ---
-                  _buildSectionHeader('AKUN'),
-                  _buildMenuCard([
-                    _buildMenuItem(
-                      Icons.person_outline,
-                      'Informasi Pribadi',
-                      onTap: () => _openEditProfile(context, user),
-                    ),
-                    _buildMenuItem(
-                      Icons.lock_open_outlined,
-                      'Ubah Kata Sandi',
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const ChangePasswordScreen(),
-                        ),
-                      ),
-                    ),
-                  ]),
-                  const SizedBox(height: 20),
-
-                  // --- 7. GRUP MENU: PREFERENSI ---
-                  _buildSectionHeader('PREFERENSI'),
-                  _buildMenuCard([
-                    _buildMenuItem(
-                      Icons.notifications_none_outlined,
-                      'Notifikasi',
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const NotificationSettingsScreen(),
-                        ),
-                      ),
-                    ),
-                    _buildMenuItem(
-                      Icons.language_outlined,
-                      'Bahasa',
-                      trailingText: 'Indonesia',
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (_) => const LanguageScreen()),
-                      ),
-                    ),
-                  ]),
-                  const SizedBox(height: 20),
-
-                  // --- 8. GRUP MENU: TENTANG ---
-                  _buildSectionHeader('TENTANG'),
-                  _buildMenuCard([
-                    _buildMenuItem(
-                      Icons.help_outline_outlined,
-                      'Bantuan',
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const HelpScreen()),
-                      ),
-                    ),
-                    _buildMenuItem(
-                      Icons.info_outline_rounded,
-                      'Versi Aplikasi',
-                      trailingText: '1.0.0',
-                      showArrow: false,
-                    ),
-                  ]),
-                  const SizedBox(height: 32),
-
-                  // --- 9. TOMBOL KELUAR ---
-                  OutlinedButton.icon(
-                    onPressed: () async {
-                      await AuthService().logout();
-                      if (!context.mounted) return;
-                      Navigator.pushNamedAndRemoveUntil(
-                          context, AppRoutes.login, (r) => false);
-                    },
-                    icon: const Icon(Icons.logout,
-                        size: 18, color: AppTheme.textPrimary),
-                    label: const Text(
-                      'Keluar',
-                      style: TextStyle(
-                          color: AppTheme.textPrimary,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 15),
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size(double.infinity, 50),
-                      side: const BorderSide(
-                          color: AppTheme.textPrimary, width: 1.2),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(25)),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  void _openEditProfile(BuildContext context, AppUser user) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => EditProfileScreen(
-          user: user,
-          onSave: (updatedUser) => UserRepository().updateProfile(
-            name: updatedUser.name,
-            bio: updatedUser.bio,
+              // Promo Upgrade Subscription Card (Mint Style Sesuai App.tsx)
+              _buildUpgradePromoCard(context),
+              const SizedBox(height: 32),
+            ],
           ),
         ),
       ),
     );
   }
 
-  // --- WIDGET HELPERS COMPONENT ---
+  // ---------------------------------------------------------------------------
+  // Sub-Widgets / Component Slicing
+  // ---------------------------------------------------------------------------
 
-  Widget _buildStatCard(String count, String label) {
+  Widget _buildHeader(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        const Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'ACCOUNT & SETTINGS',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.5,
+                color: AppTheme.muted,
+              ),
+            ),
+            SizedBox(height: 2),
+            Text(
+              'Your profile',
+              style: TextStyle(
+                fontSize: 27,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.5,
+                color: AppTheme.ink,
+              ),
+            ),
+          ],
+        ),
+        Row(
+          children: [
+            Material(
+              color: Colors.white,
+              shape: const CircleBorder(),
+              child: InkWell(
+                customBorder: const CircleBorder(),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const SearchScreen()),
+                ),
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    boxShadow: [AppTheme.shadowSoft],
+                  ),
+                  child: const Icon(Icons.search_rounded,
+                      color: AppTheme.ink, size: 20),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Material(
+              color: Colors.white,
+              shape: const CircleBorder(),
+              child: InkWell(
+                customBorder: const CircleBorder(),
+                onTap: () => showNotificationsSheet(context: context),
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    boxShadow: [AppTheme.shadowSoft],
+                  ),
+                  child: const Icon(Icons.notifications_none_rounded,
+                      color: AppTheme.ink, size: 20),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMainProfileCard(String name, String email, String initials) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 16),
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 20),
       decoration: BoxDecoration(
-        color: const Color(0xFFF9FAFB),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFF3F4F6)),
+        color: AppTheme.ink,
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: const [AppTheme.shadowCard],
       ),
       child: Column(
         children: [
-          Text(
-            count,
-            style: const TextStyle(
+          // Big Avatar Circle
+          Container(
+            width: 80,
+            height: 80,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.12),
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: Colors.white.withOpacity(0.15),
+                width: 4,
+              ),
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              initials,
+              style: const TextStyle(
                 fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: AppTheme.textPrimary),
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            name,
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              color: Colors.white,
+            ),
           ),
           const SizedBox(height: 4),
           Text(
-            label,
-            style: const TextStyle(fontSize: 13, color: AppTheme.textSecondary),
+            email,
+            style: const TextStyle(fontSize: 12, color: Colors.white54),
+          ),
+          const SizedBox(height: 20),
+          // Edit Profile Button -> Buka EditProfileSheet (Bottom Sheet)
+          ElevatedButton(
+            onPressed: () => showEditProfileSheet(
+              context: context,
+              onProfileUpdated: () => setState(() {}),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.white.withOpacity(0.12),
+              foregroundColor: Colors.white,
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+            ),
+            child: const Text(
+              'Edit profile',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildSectionHeader(String title) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8.0, left: 4.0),
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: Text(
-          title,
+  Widget _buildStatsGrid() {
+    return BlocBuilder<MemoCubit, MemoState>(
+      builder: (context, memoState) {
+        final memos = memoState is MemoLoaded ? memoState.memos : const [];
+        final memoCount = memos.length;
+
+        return BlocBuilder<WorkspaceCubit, List<Workspace>>(
+          builder: (context, workspaces) {
+            final spaceCount = workspaces.length;
+            final sharedSpaceIds = workspaces
+                .where((w) => w.members.length > 1)
+                .map((w) => w.id)
+                .toSet();
+            final sharedCount = memos
+                .where((m) =>
+                    sharedSpaceIds.contains(m.workspaceId) ||
+                    m.attachments.isNotEmpty ||
+                    m.checklist.isNotEmpty)
+                .length;
+
+            return Container(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(22),
+                boxShadow: const [AppTheme.shadowSoft],
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                      child: _buildStatItem('$memoCount', 'Memos')),
+                  Container(width: 1, height: 24, color: AppTheme.line),
+                  Expanded(
+                      child: _buildStatItem('$spaceCount', 'Spaces')),
+                  Container(width: 1, height: 24, color: AppTheme.line),
+                  Expanded(
+                      child: _buildStatItem('$sharedCount', 'Shared')),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildStatItem(String value, String label) {
+    return Column(
+      children: [
+        Text(
+          value,
           style: const TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.bold,
-            color: AppTheme.textSecondary,
+            fontSize: 14,
+            fontWeight: FontWeight.w800,
+            color: AppTheme.ink,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          label.toUpperCase(),
+          style: const TextStyle(
+            fontSize: 9,
+            fontWeight: FontWeight.w600,
+            color: AppTheme.faint,
             letterSpacing: 0.5,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPreferencesMenu(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: const [AppTheme.shadowSoft],
+      ),
+      child: Column(
+        children: [
+          // 1. Account Settings -> Bottom Sheet
+          _buildMenuRow(
+            context,
+            Icons.settings_outlined,
+            'Account settings',
+            isFirst: true,
+            onTap: () => showAccountSettingsSheet(
+              context: context,
+              onLogout: _logout,
+            ),
+          ),
+          // 2. Notifications -> Bottom Sheet
+          _buildMenuRow(
+            context,
+            Icons.notifications_none_rounded,
+            'Notifications',
+            trailingValue: 'On',
+            onTap: () => showNotificationSettingsSheet(context: context),
+          ),
+          // 3. Language -> Bottom Sheet
+          _buildMenuRow(
+            context,
+            Icons.language_rounded,
+            'Language',
+            trailingValue: _language,
+            onTap: () => showLanguageSheet(
+              context: context,
+              currentLanguage: _language,
+              onSelected: (lang) => setState(() => _language = lang),
+            ),
+          ),
+          // 4. Help & feedback -> Bottom Sheet
+          _buildMenuRow(
+            context,
+            Icons.chat_bubble_outline_rounded,
+            'Help & feedback',
+            onTap: () => showActionSheet(
+              context: context,
+              title: 'Help & feedback',
+              description: 'How can we help you today?',
+              options: [
+                'Getting started with MemoSpace',
+                'Working with team workspaces',
+                'Memos, boards and attachments',
+                'Contact customer support',
+              ],
+              primaryButtonLabel: 'Done',
+            ),
+          ),
+          // 5. Sign out
+          _buildMenuRow(
+            context,
+            Icons.logout_rounded,
+            'Sign out',
+            iconColor: AppTheme.danger,
+            textColor: AppTheme.danger,
+            isLast: true,
+            onTap: _logout,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMenuRow(
+    BuildContext context,
+    IconData icon,
+    String title, {
+    String? trailingValue,
+    Color? iconColor,
+    Color? textColor,
+    bool isFirst = false,
+    bool isLast = false,
+    required VoidCallback onTap,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        border: isLast
+            ? null
+            : const Border(bottom: BorderSide(color: AppTheme.line, width: 1)),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.vertical(
+            top: isFirst ? const Radius.circular(24) : Radius.zero,
+            bottom: isLast ? const Radius.circular(24) : Radius.zero,
+          ),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            child: Row(
+              children: [
+                Icon(icon, color: iconColor ?? AppTheme.muted, size: 18),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: textColor ?? AppTheme.ink,
+                    ),
+                  ),
+                ),
+                if (trailingValue != null) ...[
+                  Text(
+                    trailingValue,
+                    style: const TextStyle(fontSize: 11, color: AppTheme.faint),
+                  ),
+                  const SizedBox(width: 4),
+                ],
+                const Icon(Icons.chevron_right_rounded,
+                    color: AppTheme.faint, size: 18),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildMenuCard(List<Widget> items) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-      ),
-      child: Column(
-        children: List.generate(items.length, (index) {
-          if (index == items.length - 1) {
-            return items[index];
-          }
-          return Column(
-            children: [
-              items[index],
-              const Divider(
-                  height: 1,
-                  color: Color(0xFFF3F4F6),
-                  indent: 16,
-                  endIndent: 16),
-            ],
-          );
-        }),
-      ),
-    );
-  }
-
-  Widget _buildMenuItem(
-    IconData leadingIcon,
-    String title, {
-    String? trailingText,
-    bool showArrow = true,
-    VoidCallback? onTap,
-  }) {
+  Widget _buildUpgradePromoCard(BuildContext context) {
     return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
+      onTap: () => showUpgradeSheet(context: context),
+      borderRadius: BorderRadius.circular(22),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppTheme.mint,
+          borderRadius: BorderRadius.circular(22),
+          boxShadow: const [AppTheme.shadowSoft],
+        ),
         child: Row(
           children: [
-            Icon(leadingIcon, color: AppTheme.textPrimary, size: 22),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w500,
-                  color: AppTheme.textPrimary,
-                ),
+            Container(
+              width: 40,
+              height: 40,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.auto_awesome_rounded,
+                  color: AppTheme.olive, size: 18),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'MemoSpace Plus',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.ink,
+                    ),
+                  ),
+                  SizedBox(height: 2),
+                  Text(
+                    'Unlock unlimited shared spaces',
+                    style: TextStyle(fontSize: 10, color: AppTheme.muted),
+                  ),
+                ],
               ),
             ),
-            if (trailingText != null)
-              Text(
-                trailingText,
-                style: const TextStyle(
-                    fontSize: 14, color: AppTheme.textSecondary),
-              ),
-            if (showArrow) ...[
-              const SizedBox(width: 8),
-              const Icon(Icons.arrow_forward_ios,
-                  color: AppTheme.textSecondary, size: 12),
-            ]
+            const Icon(Icons.chevron_right_rounded,
+                color: AppTheme.muted, size: 18),
           ],
         ),
       ),
