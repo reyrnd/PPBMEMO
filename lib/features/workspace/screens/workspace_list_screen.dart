@@ -31,31 +31,44 @@ class WorkspaceListScreen extends StatelessWidget {
             return Scaffold(
               backgroundColor: AppTheme.canvas,
               body: SafeArea(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const SizedBox(height: 16),
-                      _header(context, workspaces.length),
-                      const SizedBox(height: 20),
-                      _actions(context),
-                      const SizedBox(height: 20),
-                      _stats(workspaces.length, memberCount, memoCount),
-                      const SizedBox(height: 28),
-                      const Text(
-                        'All workspaces',
-                        style: TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w700,
-                          color: AppTheme.ink,
-                          letterSpacing: -0.2,
+                child: RefreshIndicator(
+                  color: AppTheme.ink,
+                  backgroundColor: Colors.white,
+                  onRefresh: () async {
+                    await Future.wait([
+                      context.read<WorkspaceCubit>().refresh(),
+                      context.read<MemoCubit>().refresh(),
+                    ]);
+                  },
+                  child: SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(
+                      parent: BouncingScrollPhysics(),
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 16),
+                        _header(context, workspaces.length),
+                        const SizedBox(height: 20),
+                        _actions(context),
+                        const SizedBox(height: 20),
+                        _stats(workspaces.length, memberCount, memoCount),
+                        const SizedBox(height: 28),
+                        const Text(
+                          'All workspaces',
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w700,
+                            color: AppTheme.ink,
+                            letterSpacing: -0.2,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                      _workspaceList(context, workspaces),
-                      const SizedBox(height: 24),
-                    ],
+                        const SizedBox(height: 12),
+                        _workspaceList(context, workspaces),
+                        const SizedBox(height: 24),
+                      ],
+                    ),
                   ),
                 ),
               ),

@@ -23,10 +23,12 @@ class MemoCubit extends Cubit<MemoState> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   StreamSubscription? _memosSubscription;
   final List<Memo> _localMemos = [];
+  List<String> _activeWorkspaceIds = [];
 
   MemoCubit() : super(MemoLoaded(const []));
 
   void streamMemos(List<String> workspaceIds) {
+    _activeWorkspaceIds = List<String>.from(workspaceIds);
     _memosSubscription?.cancel();
 
     if (workspaceIds.isEmpty) {
@@ -63,6 +65,85 @@ class MemoCubit extends Cubit<MemoState> {
       });
     } catch (e) {
       emit(MemoLoaded(List.unmodifiable(_localMemos)));
+    }
+  }
+
+  Future<void> refresh() async {
+    streamMemos(_activeWorkspaceIds);
+    await Future.delayed(const Duration(milliseconds: 450));
+  }
+
+  Future<void> syncAuthorNameForCurrentUser(String newName) async {
+    final trimmed = newName.trim();
+    if (trimmed.isEmpty) return;
+
+    final user = FirebaseAuth.instance.currentUser;
+    final uid = user?.uid ?? 'demo-naya';
+    final parts = trimmed.split(' ').where((p) => p.isNotEmpty).toList();
+    final newInitials = parts.isNotEmpty
+        ? (parts.first[0] + (parts.length > 1 ? parts.last[0] : ''))
+            .toUpperCase()
+        : 'NA';
+
+    // Update local memos
+    for (int i = 0; i < _localMemos.length; i++) {
+      final m = _localMemos[i];
+      if (m.authorId == uid || m.authorId == 'demo-naya' || m.authorId.isEmpty) {
+        _localMemos[i] = m.copyWith(
+          authorName: trimmed,
+          assignee: newInitials,
+        );
+      }
+    }
+
+    // Update current state immediately
+    if (state is MemoLoaded) {
+      final updated = (state as MemoLoaded).memos.map((m) {
+        if (m.authorId == uid || m.authorId == 'demo-naya' || m.authorId.isEmpty) {
+          return m.copyWith(
+            authorName: trimmed,
+            assignee: newInitials,
+          );
+        }
+        return m;
+      }).toList();
+      emit(MemoLoaded(updated));
+    }
+
+    // Persist to Firestore across all active workspaces (memos, comments, activities)
+    if (user == null) return;
+    for (final wsId in _activeWorkspaceIds) {
+      if (wsId.isEmpty) continue;
+      try {
+        final memosSnap = await _firestore
+            .collection('workspaces')
+            .doc(wsId)
+            .collection('memos')
+            .where('authorId', isEqualTo: user.uid)
+            .get();
+        final batch = _firestore.batch();
+        for (final doc in memosSnap.docs) {
+          batch.update(doc.reference, {
+            'authorName': trimmed,
+            'assignee': newInitials,
+          });
+        }
+        await batch.commit();
+      } catch (_) {}
+
+      try {
+        final actSnap = await _firestore
+            .collection('workspaces')
+            .doc(wsId)
+            .collection('activities')
+            .where('actorId', isEqualTo: user.uid)
+            .get();
+        final actBatch = _firestore.batch();
+        for (final doc in actSnap.docs) {
+          actBatch.update(doc.reference, {'actorName': trimmed});
+        }
+        await actBatch.commit();
+      } catch (_) {}
     }
   }
 

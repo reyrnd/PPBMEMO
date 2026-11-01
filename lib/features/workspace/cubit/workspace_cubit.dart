@@ -11,6 +11,20 @@ class WorkspaceCubit extends Cubit<List<Workspace>> {
     _sub = _repo.watchWorkspaces().listen(emit);
   }
 
+  Future<void> refresh() async {
+    try {
+      final latest = await _repo.fetchWorkspacesOnce();
+      if (latest.isNotEmpty || state.isEmpty) {
+        emit(latest);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> syncMemberNameForCurrentUser(String newName) async {
+    await _repo.syncMemberNameForCurrentUser(newName);
+    await refresh();
+  }
+
   void togglePin(String id) {
     final w = state.firstWhere((w) => w.id == id);
     _repo.togglePin(id, !w.hasPin);

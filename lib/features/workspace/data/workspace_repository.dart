@@ -8,14 +8,10 @@ class WorkspaceRepository {
   final _db = FirebaseFirestore.instance;
 
   /// Mengembalikan user yang sedang login secara async.
-  /// Aman dipakai meski auth state Firebase belum selesai di-restore
-  /// (currentUser bisa null sesaat setelah app restart walaupun user sudah login).
   Future<User> _getUser() async {
-    // Coba ambil langsung dulu (biasanya sudah tersedia)
     User? u = FirebaseAuth.instance.currentUser;
     if (u != null) return u;
 
-    // Jika null, tunggu event pertama dari auth stream (max 5 detik)
     u = await FirebaseAuth.instance
         .authStateChanges()
         .first
@@ -42,12 +38,59 @@ class WorkspaceRepository {
             .where('memberIds', arrayContains: user.uid)
             .snapshots()
             .map((s) => s.docs
-                // Filter dokumen yang datanya masih null (pending server write)
-                .where((d) => d.data() != null && d.data()!['title'] != null)
+                .where((d) => d.data()['title'] != null)
                 .map((d) => Workspace.fromDoc(d, user.uid))
                 .toList()
               ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt)));
       });
+
+  Future<List<Workspace>> fetchWorkspacesOnce() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return const [];
+    final snap = await _db
+        .collection('workspaces')
+        .where('memberIds', arrayContains: user.uid)
+        .get();
+    final list = snap.docs
+        .where((d) => d.data()['title'] != null)
+        .map((d) => Workspace.fromDoc(d, user.uid))
+        .toList()
+      ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    return list;
+  }
+
+  Future<void> syncMemberNameForCurrentUser(String newName) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    final trimmed = newName.trim();
+    if (trimmed.isEmpty) return;
+
+    try {
+      await _db.collection('users').doc(user.uid).set(
+        {'name': trimmed, 'displayName': trimmed},
+        SetOptions(merge: true),
+      );
+    } catch (_) {}
+
+    try {
+      final snap = await _db
+          .collection('workspaces')
+          .where('memberIds', arrayContains: user.uid)
+          .get();
+      for (final doc in snap.docs) {
+        final data = doc.data();
+        final membersMap =
+            Map<String, dynamic>.from(data['members'] as Map? ?? {});
+        final existingEntry =
+            Map<String, dynamic>.from(membersMap[user.uid] as Map? ?? {});
+        final role = existingEntry['role'] as String? ??
+            (data['ownerId'] == user.uid ? 'owner' : 'member');
+        await doc.reference.update({
+          'members.${user.uid}': {'name': trimmed, 'role': role},
+        });
+      }
+    } catch (_) {}
+  }
 
   Future<void> create({
     required String title,
@@ -80,8 +123,6 @@ class WorkspaceRepository {
     });
     batch.set(_db.collection('invites').doc(code), {'workspaceId': ref.id});
     await batch.commit();
-    // _writeActivity tidak boleh membatalkan operasi utama
-    // karena rules Firestore activities bisa race dengan dokumen workspace baru
     try {
       await _writeActivity(
         workspaceId: ref.id,
@@ -171,7 +212,6 @@ class WorkspaceRepository {
 
   Future<void> delete(String wsId) async {
     final ref = _db.collection('workspaces').doc(wsId);
-    // anak dulu: rules membaca workspace, jadi dokumen induk dihapus paling akhir
     for (final memo in (await ref.collection('memos').get()).docs) {
       for (final c
           in (await memo.reference.collection('comments').get()).docs) {

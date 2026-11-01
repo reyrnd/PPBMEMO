@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class Memo {
   final String id;
@@ -99,14 +100,28 @@ class Memo {
       }
     }
 
-    final authorName = map['authorName'] as String? ?? '';
+    final currentUser = FirebaseAuth.instance.currentUser;
+    final rawAuthorId = map['authorId'] as String? ?? '';
+    String authorName = map['authorName'] as String? ?? '';
+    if (currentUser != null &&
+        (rawAuthorId == currentUser.uid || rawAuthorId == 'demo-naya') &&
+        currentUser.displayName != null &&
+        currentUser.displayName!.trim().isNotEmpty) {
+      authorName = currentUser.displayName!.trim();
+    }
+
     String rawAssignee = (map['assignee'] as String?) ?? '';
-    if (rawAssignee.isEmpty && authorName.isNotEmpty) {
+    if (authorName.isNotEmpty) {
       final parts =
           authorName.trim().split(' ').where((p) => p.isNotEmpty).toList();
       if (parts.isNotEmpty) {
-        rawAssignee = (parts.first[0] + (parts.length > 1 ? parts.last[0] : ''))
-            .toUpperCase();
+        final computedInitials =
+            (parts.first[0] + (parts.length > 1 ? parts.last[0] : ''))
+                .toUpperCase();
+        if (rawAssignee.isEmpty ||
+            (currentUser != null && rawAuthorId == currentUser.uid)) {
+          rawAssignee = computedInitials;
+        }
       }
     }
     if (rawAssignee.isEmpty) {

@@ -31,85 +31,94 @@ class SheetFrame extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.only(
-        left: 20,
-        right: 20,
-        top: 14,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 28,
-      ),
-      decoration: const BoxDecoration(
-        color: AppTheme.canvas,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-        boxShadow: [AppTheme.shadowCard],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Drag handle
-          Center(
-            child: Container(
-              width: 40,
-              height: 4,
-              margin: const EdgeInsets.only(bottom: 16),
-              decoration: BoxDecoration(
-                color: AppTheme.line,
-                borderRadius: BorderRadius.circular(2),
+    final maxSheetHeight = MediaQuery.of(context).size.height * 0.90;
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxHeight: maxSheetHeight),
+      child: Container(
+        width: double.infinity,
+        padding: EdgeInsets.only(
+          left: 20,
+          right: 20,
+          top: 14,
+          bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+        ),
+        decoration: const BoxDecoration(
+          color: AppTheme.canvas,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+          boxShadow: [AppTheme.shadowCard],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Drag handle
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: AppTheme.line,
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
             ),
-          ),
-          // Header: Title, Description & Close Button
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                        color: AppTheme.ink,
-                        letterSpacing: -0.3,
+            // Header: Title, Description & Close Button
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: AppTheme.ink,
+                          letterSpacing: -0.3,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      description,
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: AppTheme.muted,
-                        height: 1.4,
-                        fontWeight: FontWeight.w500,
+                      const SizedBox(height: 4),
+                      Text(
+                        description,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: AppTheme.muted,
+                          height: 1.4,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              GestureDetector(
-                onTap: () => Navigator.of(context).pop(),
-                child: Container(
-                  width: 36,
-                  height: 36,
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    shape: BoxShape.circle,
-                    boxShadow: [AppTheme.shadowSoft],
+                    ],
                   ),
-                  child: const Icon(Icons.close_rounded,
-                      color: AppTheme.ink, size: 18),
                 ),
+                const SizedBox(width: 12),
+                GestureDetector(
+                  onTap: () => Navigator.of(context).pop(),
+                  child: Container(
+                    width: 36,
+                    height: 36,
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                      boxShadow: [AppTheme.shadowSoft],
+                    ),
+                    child: const Icon(Icons.close_rounded,
+                        color: AppTheme.ink, size: 18),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            Flexible(
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                child: child,
               ),
-            ],
-          ),
-          const SizedBox(height: 18),
-          child,
-        ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1667,27 +1676,43 @@ void showEditProfileSheet({
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'DISPLAY NAME',
-                    style: TextStyle(
-                      fontSize: 9,
-                      fontWeight: FontWeight.w700,
-                      color: AppTheme.faint,
-                      letterSpacing: 0.8,
-                    ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'DISPLAY NAME',
+                        style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700,
+                          color: AppTheme.faint,
+                          letterSpacing: 0.8,
+                        ),
+                      ),
+                      Text(
+                        '${nameController.text.length}/18',
+                        style: const TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.faint,
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 4),
                   TextField(
                     controller: nameController,
+                    maxLength: 18,
+                    onChanged: (_) => setModalState(() {}),
                     style: const TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
                       color: AppTheme.ink,
                     ),
                     decoration: const InputDecoration(
-                      hintText: 'Your name',
+                      hintText: 'Your name (max 18 chars)',
                       border: InputBorder.none,
                       isDense: true,
+                      counterText: '',
                       contentPadding:
                           EdgeInsets.symmetric(horizontal: 2, vertical: 6),
                     ),
@@ -1744,14 +1769,38 @@ void showEditProfileSheet({
                 onPressed: isSaving
                     ? null
                     : () async {
-                        final newName = nameController.text.trim();
-                        if (newName.isEmpty) return;
+                        final rawName = nameController.text.trim();
+                        if (rawName.isEmpty) return;
+                        final newName = rawName.length > 18
+                            ? rawName.substring(0, 18)
+                            : rawName;
                         setModalState(() => isSaving = true);
                         try {
                           await FirebaseAuth.instance.currentUser
                               ?.updateDisplayName(newName);
+                          if (context.mounted) {
+                            await context
+                                .read<MemoCubit>()
+                                .syncAuthorNameForCurrentUser(newName);
+                          }
+                          if (context.mounted) {
+                            await context
+                                .read<WorkspaceCubit>()
+                                .syncMemberNameForCurrentUser(newName);
+                          }
                           onProfileUpdated();
                           if (ctx.mounted) Navigator.pop(ctx);
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  'Username diperbarui ke "$newName" untuk semua memo Anda.',
+                                ),
+                                behavior: SnackBarBehavior.floating,
+                                backgroundColor: AppTheme.ink,
+                              ),
+                            );
+                          }
                         } catch (e) {
                           setModalState(() => isSaving = false);
                         }

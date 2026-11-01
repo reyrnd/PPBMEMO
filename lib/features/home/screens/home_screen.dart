@@ -24,9 +24,21 @@ class HomeScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppTheme.canvas,
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 20.0),
-          child: Column(
+        child: RefreshIndicator(
+          color: AppTheme.ink,
+          backgroundColor: Colors.white,
+          onRefresh: () async {
+            await Future.wait([
+              context.read<WorkspaceCubit>().refresh(),
+              context.read<MemoCubit>().refresh(),
+            ]);
+          },
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(
+              parent: BouncingScrollPhysics(),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 20.0),
+            child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 16),
@@ -67,6 +79,7 @@ class HomeScreen extends StatelessWidget {
               const SizedBox(height: 32),
             ],
           ),
+        ),
         ),
       ),
     );
@@ -252,38 +265,45 @@ class HomeScreen extends StatelessWidget {
 
   Widget _buildHeader(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
-    final firstName =
-        (user?.displayName != null && user!.displayName!.isNotEmpty)
-            ? user.displayName!.split(' ').first
+    final rawFirst =
+        (user?.displayName != null && user!.displayName!.trim().isNotEmpty)
+            ? user.displayName!.trim().split(' ').first
             : 'Naya';
+    final firstName =
+        rawFirst.length > 14 ? '${rawFirst.substring(0, 14)}…' : rawFirst;
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'MEMOSPACE',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 1.6,
-                color: AppTheme.muted,
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'MEMOSPACE',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.6,
+                  color: AppTheme.muted,
+                ),
               ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              'Good morning, $firstName',
-              style: const TextStyle(
-                fontSize: 27,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -0.8,
-                color: AppTheme.ink,
+              const SizedBox(height: 2),
+              Text(
+                'Good morning, $firstName',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 25,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.8,
+                  color: AppTheme.ink,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
+        const SizedBox(width: 10),
         Row(
           children: [
             _buildIconButton(

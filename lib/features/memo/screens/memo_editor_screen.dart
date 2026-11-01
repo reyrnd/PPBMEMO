@@ -458,14 +458,20 @@ class _MemoEditorScreenState extends State<MemoEditorScreen> {
         }
         _savedAtText =
             matchedMemo.meta.isEmpty ? 'Saved recently' : matchedMemo.meta;
-        _authorName = matchedMemo.authorName.isEmpty
-            ? 'Workspace member'
-            : matchedMemo.authorName;
-
         // Kepemilikan memo: hanya pemilik yang bisa mengedit
         _canEdit = matchedMemo.authorId.isEmpty ||
             matchedMemo.authorId == currentUid ||
             (currentUser == null && matchedMemo.authorId == 'demo-naya');
+
+        if (_canEdit &&
+            currentUser?.displayName != null &&
+            currentUser!.displayName!.trim().isNotEmpty) {
+          _authorName = currentUser.displayName!.trim();
+        } else {
+          _authorName = matchedMemo.authorName.isEmpty
+              ? 'Workspace member'
+              : matchedMemo.authorName;
+        }
 
         if (matchedMemo.attachments.isNotEmpty) {
           _attachments.addAll(
@@ -895,12 +901,10 @@ class _MemoEditorScreenState extends State<MemoEditorScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
-        child: SheetFrame(
-          title: 'Insert link',
-          description: 'Add a clickable link into your memo.',
-          child: Column(
+      builder: (ctx) => SheetFrame(
+        title: 'Insert link',
+        description: 'Add a clickable link into your memo.',
+        child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
@@ -1007,8 +1011,7 @@ class _MemoEditorScreenState extends State<MemoEditorScreen> {
             ],
           ),
         ),
-      ),
-    );
+      );
   }
 
   /// Menampilkan bottom sheet Add attachment (Photo, Video, PDF, Document)
@@ -1718,10 +1721,14 @@ class _MemoEditorScreenState extends State<MemoEditorScreen> {
               _buildDetailHeader(),
               const SizedBox(height: 16),
               _buildMainEditorCard(workspaceName),
-              const SizedBox(height: 16),
-              _buildAttachmentsCard(),
-              const SizedBox(height: 16),
-              _buildChecklistCard(),
+              if (_canEdit || _attachments.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                _buildAttachmentsCard(),
+              ],
+              if (_canEdit || _checklistItems.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                _buildChecklistCard(),
+              ],
               // Hanya tampilkan Comments jika memo sudah dibuat (!_isCreating)
               if (!_isCreating) ...[
                 const SizedBox(height: 16),

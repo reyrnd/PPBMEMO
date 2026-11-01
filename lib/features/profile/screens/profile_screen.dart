@@ -51,44 +51,60 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Scaffold(
       backgroundColor: AppTheme.canvas,
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 20.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 16),
-              // Header Akun & Pengaturan
-              _buildHeader(context),
-              const SizedBox(height: 20),
+        child: RefreshIndicator(
+          color: AppTheme.ink,
+          backgroundColor: Colors.white,
+          onRefresh: () async {
+            await FirebaseAuth.instance.currentUser?.reload();
+            if (!mounted) return;
+            await Future.wait([
+              context.read<WorkspaceCubit>().refresh(),
+              context.read<MemoCubit>().refresh(),
+            ]);
+            if (mounted) setState(() {});
+          },
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(
+              parent: BouncingScrollPhysics(),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 20.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 16),
+                // Header Akun & Pengaturan
+                _buildHeader(context),
+                const SizedBox(height: 20),
 
-              // Main Profile Card (Dark/Ink Style Sesuai App.tsx)
-              _buildMainProfileCard(userName, userEmail, initials),
-              const SizedBox(height: 20),
+                // Main Profile Card (Dark/Ink Style Sesuai App.tsx)
+                _buildMainProfileCard(userName, userEmail, initials),
+                const SizedBox(height: 20),
 
-              // Statistics Info Bar
-              _buildStatsGrid(),
-              const SizedBox(height: 28),
+                // Statistics Info Bar
+                _buildStatsGrid(),
+                const SizedBox(height: 28),
 
-              // Preferences Section Title
-              const Text(
-                'Preferences',
-                style: TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w700,
-                  color: AppTheme.ink,
-                  letterSpacing: -0.2,
+                // Preferences Section Title
+                const Text(
+                  'Preferences',
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.ink,
+                    letterSpacing: -0.2,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 12),
+                const SizedBox(height: 12),
 
-              // Menu List Container
-              _buildPreferencesMenu(context),
-              const SizedBox(height: 20),
+                // Menu List Container
+                _buildPreferencesMenu(context),
+                const SizedBox(height: 20),
 
-              // Promo Upgrade Subscription Card (Mint Style Sesuai App.tsx)
-              _buildUpgradePromoCard(context),
-              const SizedBox(height: 32),
-            ],
+                // Promo Upgrade Subscription Card (Mint Style Sesuai App.tsx)
+                _buildUpgradePromoCard(context),
+                const SizedBox(height: 32),
+              ],
+            ),
           ),
         ),
       ),

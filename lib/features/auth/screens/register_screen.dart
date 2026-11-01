@@ -41,6 +41,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
       setState(() => _errorMessage = 'Silakan masukkan nama lengkap Anda.');
       return;
     }
+    if (name.length > 18) {
+      setState(
+        () => _errorMessage = 'Nama maksimal 18 karakter agar tampilan tetap rapi.',
+      );
+      return;
+    }
     if (email.isEmpty || !email.contains('@') || !email.contains('.')) {
       setState(() => _errorMessage = 'Silakan masukkan alamat email yang valid.');
       return;
@@ -249,11 +255,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
               const SizedBox(height: 12),
 
               _buildInputCard(
-                label: 'FULL NAME',
+                label: 'USERNAME / FULL NAME (MAX 18 CHARS)',
                 hint: 'e.g. Naya Anindita',
                 controller: _nameController,
                 keyboardType: TextInputType.name,
                 prefixIcon: Icons.person_outline_rounded,
+                maxLength: 18,
               ),
               const SizedBox(height: 12),
 
@@ -548,6 +555,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     bool obscureText = false,
     Widget? suffix,
     TextInputType? keyboardType,
+    int? maxLength,
   }) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
@@ -582,6 +590,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   controller: controller,
                   obscureText: obscureText,
                   keyboardType: keyboardType,
+                  maxLength: maxLength,
                   onChanged: (_) {
                     setState(() {
                       if (_errorMessage != null) {
@@ -596,6 +605,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                   decoration: InputDecoration(
                     hintText: hint,
+                    counterText: '',
                     hintStyle: const TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w500,

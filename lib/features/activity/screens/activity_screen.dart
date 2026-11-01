@@ -115,13 +115,25 @@ class ActivityScreen extends StatelessWidget {
                     );
                   }
 
-                  return ListView.builder(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 8,
-                    ),
-                    itemCount: resolvedActivities.length,
-                    itemBuilder: (context, index) {
+                  return RefreshIndicator(
+                    color: AppTheme.ink,
+                    backgroundColor: Colors.white,
+                    onRefresh: () async {
+                      await Future.wait([
+                        context.read<WorkspaceCubit>().refresh(),
+                        context.read<MemoCubit>().refresh(),
+                      ]);
+                    },
+                    child: ListView.builder(
+                      physics: const AlwaysScrollableScrollPhysics(
+                        parent: BouncingScrollPhysics(),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 8,
+                      ),
+                      itemCount: resolvedActivities.length,
+                      itemBuilder: (context, index) {
                       final activity = resolvedActivities[index];
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 10),
@@ -230,6 +242,7 @@ class ActivityScreen extends StatelessWidget {
                         ),
                       );
                     },
+                  ),
                   );
                 },
               ),

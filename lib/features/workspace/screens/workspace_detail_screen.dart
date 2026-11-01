@@ -13,6 +13,7 @@ import '../../memo/screens/memo_editor_screen.dart';
 import '../board/board_view.dart';
 import '../board/canvas_board.dart';
 import '../board/kanban_board.dart';
+import '../cubit/workspace_cubit.dart';
 import '../models/workspace.dart';
 
 class WorkspaceDetailScreen extends StatefulWidget {
@@ -49,9 +50,21 @@ class _WorkspaceDetailScreenState extends State<WorkspaceDetailScreen> {
               (sum, m) => sum + m.checklist.length,
             );
 
-            return SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 20.0),
-              child: Column(
+            return RefreshIndicator(
+              color: AppTheme.ink,
+              backgroundColor: Colors.white,
+              onRefresh: () async {
+                await Future.wait([
+                  context.read<WorkspaceCubit>().refresh(),
+                  context.read<MemoCubit>().refresh(),
+                ]);
+              },
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(
+                  parent: BouncingScrollPhysics(),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const SizedBox(height: 16),
@@ -111,6 +124,7 @@ class _WorkspaceDetailScreenState extends State<WorkspaceDetailScreen> {
                   ],
                   const SizedBox(height: 32),
                 ],
+              ),
               ),
             );
           },

@@ -118,9 +118,21 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 }
               });
 
-            return SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 20.0),
-              child: Column(
+            return RefreshIndicator(
+              color: AppTheme.ink,
+              backgroundColor: Colors.white,
+              onRefresh: () async {
+                await Future.wait([
+                  context.read<WorkspaceCubit>().refresh(),
+                  context.read<MemoCubit>().refresh(),
+                ]);
+              },
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(
+                  parent: BouncingScrollPhysics(),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const SizedBox(height: 16),
@@ -185,6 +197,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                         ),
                   const SizedBox(height: 24),
                 ],
+              ),
               ),
             );
           },

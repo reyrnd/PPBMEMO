@@ -2,8 +2,12 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../app_theme.dart';
 import '../widgets/app_bottom_sheet.dart';
+
+const MethodChannel _nativePickerChannel =
+    MethodChannel('memospace/attachment_picker');
 
 class PickedAttachmentFile {
   final String name;
@@ -116,6 +120,32 @@ Future<PickedAttachmentFile?> pickAttachmentFromDevice({
   required String type,
   bool useCamera = false,
 }) async {
+  if (Platform.isAndroid) {
+    try {
+      final result = await _nativePickerChannel
+          .invokeMethod<Map<dynamic, dynamic>>('pickAttachment', {
+        'type': type,
+        'useCamera': useCamera,
+      });
+      if (result == null) return null;
+      final name = (result['name'] as String?) ?? '$type file';
+      final sizeBytes = (result['sizeBytes'] as num?)?.toInt() ?? 0;
+      final pickedType = (result['type'] as String?) ?? type;
+      final dataUrl = result['dataUrl'] as String?;
+      return PickedAttachmentFile(
+        name: name,
+        sizeLabel: _formatBytes(sizeBytes),
+        type: pickedType,
+        dataUrl: dataUrl,
+      );
+    } on MissingPluginException {
+      // Fallback jika aplikasi belum di-rebuild penuh (hot reload saja)
+    } on PlatformException {
+      // Fallback jika intent kamera/file tidak ditemukan di perangkat
+    }
+  }
+
+  if (!context.mounted) return null;
   if (useCamera && (type == 'Photo' || type == 'Video')) {
     return captureFromCamera(context: context, type: type);
   }

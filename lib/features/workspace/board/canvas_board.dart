@@ -1,10 +1,14 @@
+import 'dart:convert';
 import 'dart:math' as math;
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:memospace/core/app_theme.dart';
+import 'package:memospace/core/utils/attachment_picker.dart';
 import 'package:memospace/core/widgets/app_bottom_sheet.dart';
 import 'package:memospace/features/memo/cubit/memo_cubit.dart';
 import 'package:memospace/features/memo/models/memo.dart';
+import 'package:memospace/features/memo/screens/memo_editor_screen.dart';
 
 class CanvasBoard extends StatefulWidget {
   final String workspaceId;
@@ -143,8 +147,8 @@ class _CanvasBoardState extends State<CanvasBoard> {
               icon: Icons.description_outlined,
               iconBg: AppTheme.peach,
               iconFg: AppTheme.caramel,
-              title: 'Add Sticky Note',
-              subtitle: 'Capture a thought anywhere on the canvas.',
+              title: 'Add Memo / Sticky Note',
+              subtitle: 'Write notes, attach files/photos & set deadline.',
               onTap: () {
                 Navigator.pop(sheetCtx);
                 _showCreateCanvasCardSheet(isChecklist: false);
@@ -156,10 +160,29 @@ class _CanvasBoardState extends State<CanvasBoard> {
               iconBg: AppTheme.mint,
               iconFg: AppTheme.olive,
               title: 'Add Checklist',
-              subtitle: 'Add an actionable item to the canvas.',
+              subtitle: 'Create a multi-item checklist card on the canvas.',
               onTap: () {
                 Navigator.pop(sheetCtx);
                 _showCreateCanvasCardSheet(isChecklist: true);
+              },
+            ),
+            const SizedBox(height: 10),
+            _buildMenuCard(
+              icon: Icons.open_in_full_rounded,
+              iconBg: AppTheme.lilac,
+              iconFg: AppTheme.plum,
+              title: 'Open Full Memo Editor',
+              subtitle: 'Use rich text formatting, camera & full attachments.',
+              onTap: () {
+                Navigator.pop(sheetCtx);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => MemoEditorScreen(
+                      workspaceId: widget.workspaceId,
+                    ),
+                  ),
+                );
               },
             ),
             const SizedBox(height: 10),
@@ -251,6 +274,52 @@ class _CanvasBoardState extends State<CanvasBoard> {
   void _showCreateCanvasCardSheet({required bool isChecklist}) {
     final titleCtrl = TextEditingController();
     final bodyCtrl = TextEditingController();
+    final checklistInputCtrl = TextEditingController();
+    final List<Map<String, dynamic>> checklistItems = [];
+    final List<Map<String, dynamic>> attachedFiles = [];
+    String selectedDate = '';
+    bool isPickingFile = false;
+
+    void addCurrentChecklistItem(StateSetter setSheetState) {
+      final text = checklistInputCtrl.text.trim();
+      if (text.isEmpty) return;
+      setSheetState(() {
+        checklistItems.add({
+          'id': 'chk-${DateTime.now().microsecondsSinceEpoch}',
+          'text': text,
+          'done': false,
+        });
+        checklistInputCtrl.clear();
+      });
+    }
+
+    Future<void> pickCanvasAttachment(
+      String type,
+      StateSetter setSheetState, {
+      bool useCamera = false,
+    }) async {
+      setSheetState(() => isPickingFile = true);
+      try {
+        final picked = await pickAttachmentFromDevice(
+          context: context,
+          type: type,
+          useCamera: useCamera,
+        );
+        if (picked != null) {
+          setSheetState(() {
+            attachedFiles.add({
+              'id': 'att-${DateTime.now().millisecondsSinceEpoch}',
+              'type': picked.type,
+              'name': picked.name,
+              'meta': picked.sizeLabel,
+              if (picked.dataUrl != null) 'dataUrl': picked.dataUrl,
+            });
+          });
+        }
+      } finally {
+        setSheetState(() => isPickingFile = false);
+      }
+    }
 
     showModalBottomSheet<void>(
       context: context,
@@ -259,209 +328,616 @@ class _CanvasBoardState extends State<CanvasBoard> {
       builder: (sheetCtx) => StatefulBuilder(
         builder: (ctx, setSheetState) {
           final canSave = titleCtrl.text.trim().isNotEmpty;
-          return Padding(
-            padding: EdgeInsets.only(
-              bottom: MediaQuery.of(ctx).viewInsets.bottom,
-            ),
-            child: SheetFrame(
-              title: isChecklist ? 'Add checklist' : 'Add sticky note',
-              description:
-                  'This memo will be saved to your workspace and placed on the canvas.',
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: const [AppTheme.shadowSoft],
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'TITLE',
-                          style: TextStyle(
-                            fontSize: 9,
-                            fontWeight: FontWeight.w700,
-                            color: AppTheme.faint,
-                            letterSpacing: 0.8,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        TextField(
-                          controller: titleCtrl,
-                          autofocus: true,
-                          onChanged: (_) => setSheetState(() {}),
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: AppTheme.ink,
-                          ),
-                          decoration: InputDecoration(
-                            hintText:
-                                isChecklist ? 'Checklist title' : 'Note title',
-                            hintStyle: const TextStyle(color: AppTheme.faint),
-                            filled: false,
-                            isDense: true,
-                            border: InputBorder.none,
-                            enabledBorder: InputBorder.none,
-                            focusedBorder: InputBorder.none,
-                            contentPadding: EdgeInsets.zero,
-                          ),
-                        ),
-                      ],
-                    ),
+          return SheetFrame(
+            title: isChecklist ? 'Add checklist to canvas' : 'Add memo to canvas',
+            description: isChecklist
+                ? 'Tambahkan judul dan daftar item checklist yang ingin ditaruh di canvas.'
+                : 'Isi catatan, lampirkan foto/dokumen, atau atur tenggat waktu memo.',
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // 1. TITLE INPUT
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
                   ),
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: const [AppTheme.shadowSoft],
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          isChecklist ? 'FIRST ITEM' : 'NOTE',
-                          style: const TextStyle(
-                            fontSize: 9,
-                            fontWeight: FontWeight.w700,
-                            color: AppTheme.faint,
-                            letterSpacing: 0.8,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        TextField(
-                          controller: bodyCtrl,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                            color: AppTheme.muted,
-                          ),
-                          decoration: const InputDecoration(
-                            hintText: 'Add details',
-                            hintStyle: TextStyle(color: AppTheme.faint),
-                            filled: false,
-                            isDense: true,
-                            border: InputBorder.none,
-                            enabledBorder: InputBorder.none,
-                            focusedBorder: InputBorder.none,
-                            contentPadding: EdgeInsets.zero,
-                          ),
-                        ),
-                      ],
-                    ),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: const [AppTheme.shadowSoft],
                   ),
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      GestureDetector(
-                        onTap: () => Navigator.pop(sheetCtx),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 11,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(24),
-                            boxShadow: const [AppTheme.shadowSoft],
-                          ),
-                          child: const Text(
-                            'Cancel',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              color: AppTheme.muted,
-                            ),
-                          ),
+                      const Text(
+                        'TITLE',
+                        style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700,
+                          color: AppTheme.faint,
+                          letterSpacing: 0.8,
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      GestureDetector(
-                        onTap: !canSave
-                            ? null
-                            : () async {
-                                final wsId = widget.workspaceId.isNotEmpty
-                                    ? widget.workspaceId
-                                    : (widget.memos.isNotEmpty
-                                        ? widget.memos.first.workspaceId
-                                        : 'personal-space');
-                                final count = widget.memos.length;
-                                final newX = 40.0 + (count % 2) * 200.0;
-                                final newY = 60.0 + (count ~/ 2) * 180.0;
-
-                                await context.read<MemoCubit>().addMemo(
-                                      workspaceId: wsId,
-                                      title: titleCtrl.text.trim(),
-                                      content: isChecklist
-                                          ? ''
-                                          : bodyCtrl.text.trim(),
-                                      tag: widget.workspaceName,
-                                      dueDate: '',
-                                      checklistTitle: isChecklist
-                                          ? titleCtrl.text.trim()
-                                          : '',
-                                      boardX: newX,
-                                      boardY: newY,
-                                      checklist: isChecklist
-                                          ? [
-                                              {
-                                                'id':
-                                                    'chk-${DateTime.now().millisecondsSinceEpoch}',
-                                                'text': bodyCtrl.text
-                                                        .trim()
-                                                        .isEmpty
-                                                    ? 'First checklist item'
-                                                    : bodyCtrl.text.trim(),
-                                                'done': false,
-                                              }
-                                            ]
-                                          : const [],
-                                    );
-                                if (!sheetCtx.mounted) return;
-                                Navigator.pop(sheetCtx);
-                              },
-                        child: Opacity(
-                          opacity: canSave ? 1.0 : 0.35,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 11,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppTheme.ink,
-                              borderRadius: BorderRadius.circular(24),
-                            ),
-                            child: const Text(
-                              'Add to canvas',
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.white,
-                              ),
-                            ),
+                      const SizedBox(height: 6),
+                      TextField(
+                        controller: titleCtrl,
+                        autofocus: true,
+                        onChanged: (_) => setSheetState(() {}),
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: AppTheme.ink,
+                        ),
+                        decoration: InputDecoration(
+                          hintText:
+                              isChecklist ? 'Judul checklist...' : 'Judul memo...',
+                          hintStyle: const TextStyle(color: AppTheme.faint),
+                          filled: false,
+                          isDense: true,
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 2,
+                            vertical: 4,
                           ),
                         ),
                       ),
                     ],
                   ),
+                ),
+                const SizedBox(height: 10),
+
+                // 2. NOTES OR MULTI-ITEM CHECKLIST BUILDER
+                if (isChecklist) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: const [AppTheme.shadowSoft],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              'CHECKLIST ITEMS',
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w700,
+                                color: AppTheme.faint,
+                                letterSpacing: 0.8,
+                              ),
+                            ),
+                            Text(
+                              '${checklistItems.length} item',
+                              style: const TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w700,
+                                color: AppTheme.olive,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        if (checklistItems.isNotEmpty) ...[
+                          ...checklistItems.asMap().entries.map((entry) {
+                            final idx = entry.key;
+                            final item = entry.value;
+                            final done = item['done'] == true;
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 6),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 8,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.canvas,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Row(
+                                  children: [
+                                    GestureDetector(
+                                      onTap: () => setSheetState(() {
+                                        checklistItems[idx]['done'] = !done;
+                                      }),
+                                      child: Icon(
+                                        done
+                                            ? Icons.check_circle_rounded
+                                            : Icons.radio_button_unchecked_rounded,
+                                        size: 16,
+                                        color: done
+                                            ? AppTheme.olive
+                                            : AppTheme.muted,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        item['text'] as String,
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: AppTheme.ink,
+                                          decoration: done
+                                              ? TextDecoration.lineThrough
+                                              : null,
+                                        ),
+                                      ),
+                                    ),
+                                    GestureDetector(
+                                      onTap: () => setSheetState(() {
+                                        checklistItems.removeAt(idx);
+                                      }),
+                                      child: const Icon(
+                                        Icons.close_rounded,
+                                        size: 15,
+                                        color: AppTheme.faint,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }),
+                          const SizedBox(height: 4),
+                        ],
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: checklistInputCtrl,
+                                onSubmitted: (_) =>
+                                    addCurrentChecklistItem(setSheetState),
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppTheme.ink,
+                                ),
+                                decoration: const InputDecoration(
+                                  hintText: 'Tulis item lalu klik + Add...',
+                                  hintStyle: TextStyle(color: AppTheme.faint),
+                                  filled: false,
+                                  isDense: true,
+                                  border: InputBorder.none,
+                                  enabledBorder: InputBorder.none,
+                                  focusedBorder: InputBorder.none,
+                                  contentPadding: EdgeInsets.symmetric(
+                                    horizontal: 2,
+                                    vertical: 6,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            GestureDetector(
+                              onTap: () =>
+                                  addCurrentChecklistItem(setSheetState),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 7,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.mint,
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.add_rounded,
+                                      size: 14,
+                                      color: AppTheme.olive,
+                                    ),
+                                    SizedBox(width: 3),
+                                    Text(
+                                      'Add item',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppTheme.olive,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 10),
                 ],
-              ),
+
+                // Note / Description input (always available so both Memo and Checklist can have notes)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: const [AppTheme.shadowSoft],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        isChecklist ? 'ADDITIONAL NOTE (OPTIONAL)' : 'NOTE CONTENT',
+                        style: const TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700,
+                          color: AppTheme.faint,
+                          letterSpacing: 0.8,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      TextField(
+                        controller: bodyCtrl,
+                        minLines: isChecklist ? 1 : 3,
+                        maxLines: 4,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: AppTheme.ink,
+                          height: 1.45,
+                        ),
+                        decoration: InputDecoration(
+                          hintText: isChecklist
+                              ? 'Catatan tambahan (opsional)...'
+                              : 'Tulis isi memo atau detail ide Anda...',
+                          hintStyle: const TextStyle(color: AppTheme.faint),
+                          filled: false,
+                          isDense: true,
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 2,
+                            vertical: 4,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 10),
+
+                // 3. ATTACHMENTS & DEADLINE ROW
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: const [AppTheme.shadowSoft],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'ATTACHMENTS & DUE DATE',
+                            style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w700,
+                              color: AppTheme.faint,
+                              letterSpacing: 0.8,
+                            ),
+                          ),
+                          if (isPickingFile)
+                            const SizedBox(
+                              width: 12,
+                              height: 12,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 1.8,
+                                color: AppTheme.ink,
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            _buildQuickAttachChip(
+                              icon: Icons.camera_alt_outlined,
+                              label: 'Camera',
+                              bg: AppTheme.peach,
+                              fg: AppTheme.caramel,
+                              onTap: () => pickCanvasAttachment(
+                                'Photo',
+                                setSheetState,
+                                useCamera: true,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            _buildQuickAttachChip(
+                              icon: Icons.image_outlined,
+                              label: 'Photo',
+                              bg: AppTheme.peach,
+                              fg: AppTheme.caramel,
+                              onTap: () => pickCanvasAttachment(
+                                'Photo',
+                                setSheetState,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            _buildQuickAttachChip(
+                              icon: Icons.videocam_outlined,
+                              label: 'Video',
+                              bg: AppTheme.lilac,
+                              fg: AppTheme.plum,
+                              onTap: () => pickCanvasAttachment(
+                                'Video',
+                                setSheetState,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            _buildQuickAttachChip(
+                              icon: Icons.picture_as_pdf_outlined,
+                              label: 'PDF',
+                              bg: AppTheme.mint,
+                              fg: AppTheme.olive,
+                              onTap: () => pickCanvasAttachment(
+                                'PDF',
+                                setSheetState,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            _buildQuickAttachChip(
+                              icon: Icons.calendar_today_rounded,
+                              label: selectedDate.isEmpty
+                                  ? 'Due date'
+                                  : DeadlineBadge.formatShortDate(selectedDate),
+                              bg: AppTheme.surface,
+                              fg: AppTheme.ink,
+                              onTap: () async {
+                                final picked = await showDatePicker(
+                                  context: ctx,
+                                  initialDate: DateTime.now(),
+                                  firstDate: DateTime(2024),
+                                  lastDate: DateTime(2032),
+                                );
+                                if (picked != null) {
+                                  setSheetState(() {
+                                    selectedDate =
+                                        '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
+                                  });
+                                }
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (attachedFiles.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: attachedFiles.asMap().entries.map((entry) {
+                            final idx = entry.key;
+                            final att = entry.value;
+                            return Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 5,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppTheme.canvas,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(
+                                    Icons.attach_file_rounded,
+                                    size: 12,
+                                    color: AppTheme.ink,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  ConstrainedBox(
+                                    constraints:
+                                        const BoxConstraints(maxWidth: 130),
+                                    child: Text(
+                                      att['name'] as String? ?? 'File',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppTheme.ink,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 5),
+                                  GestureDetector(
+                                    onTap: () => setSheetState(() {
+                                      attachedFiles.removeAt(idx);
+                                    }),
+                                    child: const Icon(
+                                      Icons.close_rounded,
+                                      size: 13,
+                                      color: AppTheme.muted,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // 4. ACTION BUTTONS
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    GestureDetector(
+                      onTap: () => Navigator.pop(sheetCtx),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 11,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(24),
+                          boxShadow: const [AppTheme.shadowSoft],
+                        ),
+                        child: const Text(
+                          'Cancel',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: AppTheme.muted,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    GestureDetector(
+                      onTap: !canSave
+                          ? null
+                          : () async {
+                              final trimmedTitle = titleCtrl.text.trim();
+                              // Jika masih ada teks di input checklist yang belum di-klik + Add, masukkan otomatis
+                              final pendingItem =
+                                  checklistInputCtrl.text.trim();
+                              if (isChecklist && pendingItem.isNotEmpty) {
+                                checklistItems.add({
+                                  'id':
+                                      'chk-${DateTime.now().microsecondsSinceEpoch}',
+                                  'text': pendingItem,
+                                  'done': false,
+                                });
+                              }
+
+                              final wsId = widget.workspaceId.isNotEmpty
+                                  ? widget.workspaceId
+                                  : (widget.memos.isNotEmpty
+                                      ? widget.memos.first.workspaceId
+                                      : 'personal-space');
+                              final count = widget.memos.length;
+                              final newX = 40.0 + (count % 2) * 200.0;
+                              final newY = 60.0 + (count ~/ 2) * 180.0;
+
+                              await context.read<MemoCubit>().addMemo(
+                                    workspaceId: wsId,
+                                    title: trimmedTitle,
+                                    content: bodyCtrl.text.trim(),
+                                    tag: widget.workspaceName,
+                                    dueDate: selectedDate,
+                                    checklistTitle:
+                                        isChecklist ? trimmedTitle : '',
+                                    boardX: newX,
+                                    boardY: newY,
+                                    attachments: List<Map<String, dynamic>>.from(
+                                      attachedFiles,
+                                    ),
+                                    checklist: isChecklist
+                                        ? List<Map<String, dynamic>>.from(
+                                            checklistItems,
+                                          )
+                                        : const [],
+                                  );
+                              if (!sheetCtx.mounted) return;
+                              Navigator.pop(sheetCtx);
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).clearSnackBars();
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      'Memo "$trimmedTitle" berhasil ditambahkan ke Canvas!',
+                                    ),
+                                    behavior: SnackBarBehavior.floating,
+                                    backgroundColor: AppTheme.ink,
+                                  ),
+                                );
+                              }
+                            },
+                      child: Opacity(
+                        opacity: canSave ? 1.0 : 0.35,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 18,
+                            vertical: 11,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppTheme.ink,
+                            borderRadius: BorderRadius.circular(24),
+                          ),
+                          child: const Text(
+                            'Add to canvas',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildQuickAttachChip({
+    required IconData icon,
+    required String label,
+    required Color bg,
+    required Color fg,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 13, color: fg),
+            const SizedBox(width: 5),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: fg,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -703,10 +1179,169 @@ class _CanvasBoardState extends State<CanvasBoard> {
     );
   }
 
-  Widget _buildStickyCard(_CanvasItem item) {
+  Uint8List? _decodeAttachmentImage(String? dataUrl) {
+    if (dataUrl == null || !dataUrl.startsWith('data:image/')) return null;
+    final commaIdx = dataUrl.indexOf(',');
+    if (commaIdx == -1 || commaIdx + 1 >= dataUrl.length) return null;
+    try {
+      return base64Decode(dataUrl.substring(commaIdx + 1));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Widget _buildAttachmentPreviewBox(Map<String, dynamic> att, int totalCount) {
+    final name = (att['name'] as String? ?? 'Attachment').trim();
+    final rawType = (att['type'] as String? ?? 'Document').toLowerCase();
+    final dataUrl = att['dataUrl'] as String?;
+    final imageBytes = _decodeAttachmentImage(dataUrl);
+
+    IconData fileIcon = Icons.insert_drive_file_rounded;
+    String badgeLabel = 'DOC';
+    Color badgeBg = AppTheme.surface;
+    Color badgeFg = AppTheme.ink;
+
+    if (rawType.contains('photo') || rawType.contains('image')) {
+      fileIcon = Icons.image_rounded;
+      badgeLabel = 'PHOTO';
+      badgeBg = AppTheme.peach;
+      badgeFg = AppTheme.caramel;
+    } else if (rawType.contains('video')) {
+      fileIcon = Icons.videocam_rounded;
+      badgeLabel = 'VIDEO';
+      badgeBg = AppTheme.lilac;
+      badgeFg = AppTheme.plum;
+    } else if (rawType.contains('pdf')) {
+      fileIcon = Icons.picture_as_pdf_rounded;
+      badgeLabel = 'PDF';
+      badgeBg = AppTheme.mint;
+      badgeFg = AppTheme.olive;
+    }
+
+    if (imageBytes != null) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Stack(
+          children: [
+            Image.memory(
+              imageBytes,
+              width: double.infinity,
+              height: 108,
+              fit: BoxFit.cover,
+              gaplessPlayback: true,
+            ),
+            if (totalCount > 1)
+              Positioned(
+                top: 8,
+                right: 8,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppTheme.ink.withValues(alpha: 0.78),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    '+${totalCount - 1} more',
+                    style: const TextStyle(
+                      fontSize: 8,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      );
+    }
+
     return Container(
-      width: 192,
-      padding: const EdgeInsets.all(16),
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.88),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: badgeBg,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(fileIcon, size: 12, color: badgeFg),
+                    const SizedBox(width: 4),
+                    Text(
+                      badgeLabel,
+                      style: TextStyle(
+                        fontSize: 8,
+                        fontWeight: FontWeight.w800,
+                        color: badgeFg,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (totalCount > 1)
+                Text(
+                  '$totalCount files',
+                  style: const TextStyle(
+                    fontSize: 8,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.muted,
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              color: AppTheme.ink,
+            ),
+          ),
+          if ((att['meta'] as String? ?? '').isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Text(
+              att['meta'] as String,
+              style: const TextStyle(
+                fontSize: 8,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.faint,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStickyCard(_CanvasItem item) {
+    final attachments = item.sourceMemo.attachments;
+    final checklist = item.sourceMemo.checklist;
+    final hasAttachments = attachments.isNotEmpty;
+
+    return Container(
+      width: 198,
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: item.cardColor,
         borderRadius: BorderRadius.circular(22),
@@ -716,49 +1351,132 @@ class _CanvasBoardState extends State<CanvasBoard> {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.65),
-                  borderRadius: BorderRadius.circular(12),
+          if (hasAttachments) ...[
+            // Attachment Card preview at the top, followed by memo title below
+            _buildAttachmentPreviewBox(attachments.first, attachments.length),
+            const SizedBox(height: 10),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(
+                    item.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                      color: AppTheme.ink,
+                    ),
+                  ),
                 ),
-                child: Icon(item.icon, size: 15, color: item.accentColor),
-              ),
-              Icon(
-                Icons.drag_indicator_rounded,
-                size: 16,
-                color: AppTheme.ink.withValues(alpha: 0.22),
+                const SizedBox(width: 4),
+                Icon(
+                  Icons.drag_indicator_rounded,
+                  size: 15,
+                  color: AppTheme.ink.withValues(alpha: 0.25),
+                ),
+              ],
+            ),
+            if (item.sourceMemo.content.trim().isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                item.body,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w500,
+                  color: AppTheme.muted,
+                  height: 1.4,
+                ),
               ),
             ],
-          ),
-          const SizedBox(height: 14),
-          Text(
-            item.title,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w800,
-              color: AppTheme.ink,
+          ] else ...[
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.65),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    checklist.isNotEmpty
+                        ? Icons.checklist_rounded
+                        : item.icon,
+                    size: 15,
+                    color: item.accentColor,
+                  ),
+                ),
+                Icon(
+                  Icons.drag_indicator_rounded,
+                  size: 16,
+                  color: AppTheme.ink.withValues(alpha: 0.22),
+                ),
+              ],
             ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            item.body,
-            maxLines: 3,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w500,
-              color: AppTheme.muted,
-              height: 1.5,
+            const SizedBox(height: 12),
+            Text(
+              item.title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                color: AppTheme.ink,
+              ),
             ),
-          ),
-          const SizedBox(height: 14),
+            const SizedBox(height: 6),
+            if (checklist.isNotEmpty)
+              ...checklist.take(3).map((chk) {
+                final done = chk['done'] == true;
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Row(
+                    children: [
+                      Icon(
+                        done
+                            ? Icons.check_circle_rounded
+                            : Icons.radio_button_unchecked_rounded,
+                        size: 12,
+                        color: done ? AppTheme.olive : AppTheme.muted,
+                      ),
+                      const SizedBox(width: 5),
+                      Expanded(
+                        child: Text(
+                          chk['text']?.toString() ?? '',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.ink,
+                            decoration:
+                                done ? TextDecoration.lineThrough : null,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              })
+            else
+              Text(
+                item.body,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w500,
+                  color: AppTheme.muted,
+                  height: 1.5,
+                ),
+              ),
+          ],
+          const SizedBox(height: 12),
           Container(
             padding: const EdgeInsets.only(top: 10),
             decoration: BoxDecoration(

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../../../core/app_theme.dart';
 import '../../../../core/widgets/app_bottom_sheet.dart';
 import '../../memo/cubit/memo_cubit.dart';
@@ -155,7 +156,24 @@ class _KanbanBoardState extends State<KanbanBoard> {
     ];
   }
 
+  bool _canEditMemo(Memo memo) {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    final currentUid = currentUser?.uid ?? 'demo-naya';
+    return memo.authorId.isEmpty ||
+        memo.authorId == currentUid ||
+        (currentUser == null && memo.authorId == 'demo-naya');
+  }
+
   void _openTaskFormSheet(String columnId, {Memo? existingMemo}) {
+    if (existingMemo != null && !_canEditMemo(existingMemo)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Hanya pembuat memo yang dapat mengedit kartu ini.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
     final isEdit = existingMemo != null;
     final titleCtrl = TextEditingController(text: existingMemo?.title ?? '');
     final noteCtrl = TextEditingController(text: existingMemo?.content ?? '');
@@ -178,16 +196,12 @@ class _KanbanBoardState extends State<KanbanBoard> {
       backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSheetState) {
-          return Padding(
-            padding: EdgeInsets.only(
-              bottom: MediaQuery.of(ctx).viewInsets.bottom,
-            ),
-            child: SheetFrame(
-              title: isEdit ? 'Edit card' : 'Add card to board',
-              description: isEdit
-                  ? 'Update task details, column status, assignee, or deadline.'
-                  : 'Create a new card directly in this workspace board.',
-              child: Column(
+          return SheetFrame(
+            title: isEdit ? 'Edit card' : 'Add card to board',
+            description: isEdit
+                ? 'Update task details, column status, assignee, or deadline.'
+                : 'Create a new card directly in this workspace board.',
+            child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -566,6 +580,14 @@ class _KanbanBoardState extends State<KanbanBoard> {
                                     existingMemo.id,
                                   );
                               Navigator.pop(ctx);
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Kartu berhasil dihapus dari Kanban'),
+                                    behavior: SnackBarBehavior.floating,
+                                  ),
+                                );
+                              }
                             },
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppTheme.blush,
@@ -592,7 +614,21 @@ class _KanbanBoardState extends State<KanbanBoard> {
                         child: ElevatedButton(
                           onPressed: () async {
                             final trimmed = titleCtrl.text.trim();
-                            if (trimmed.isEmpty) return;
+                            if (trimmed.isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Silakan isi judul kartu terlebih dahulu.'),
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
+                              return;
+                            }
+
+                            final colTitle = _columnDefs
+                                .firstWhere(
+                                  (c) => c['id'] == selectedStatus,
+                                  orElse: () => {'title': selectedStatus},
+                                )['title'] as String;
 
                             if (isEdit) {
                               await context.read<MemoCubit>().updateMemo(
@@ -619,6 +655,20 @@ class _KanbanBoardState extends State<KanbanBoard> {
                             }
                             if (!ctx.mounted) return;
                             Navigator.pop(ctx);
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).clearSnackBars();
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    isEdit
+                                        ? 'Perubahan kartu "$trimmed" berhasil disimpan'
+                                        : 'Kartu "$trimmed" berhasil dibuat di kolom $colTitle',
+                                  ),
+                                  behavior: SnackBarBehavior.floating,
+                                  backgroundColor: AppTheme.ink,
+                                ),
+                              );
+                            }
                           },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppTheme.ink,
@@ -642,8 +692,7 @@ class _KanbanBoardState extends State<KanbanBoard> {
                   ),
                 ],
               ),
-            ),
-          );
+            );
         },
       ),
     );
@@ -770,34 +819,36 @@ class _KanbanBoardState extends State<KanbanBoard> {
             const SizedBox(height: 14),
             Row(
               children: [
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.pop(ctx);
-                      _openTaskFormSheet(
-                        currentStatus,
-                        existingMemo: memo,
-                      );
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: AppTheme.ink,
-                      elevation: 0,
-                      padding: const EdgeInsets.symmetric(vertical: 13),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(24),
+                if (_canEditMemo(memo)) ...[
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _openTaskFormSheet(
+                          currentStatus,
+                          existingMemo: memo,
+                        );
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: AppTheme.ink,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(vertical: 13),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(24),
+                        ),
                       ),
-                    ),
-                    child: const Text(
-                      'Quick edit',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
+                      child: const Text(
+                        'Quick edit',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 8),
+                  const SizedBox(width: 8),
+                ],
                 Expanded(
                   child: ElevatedButton(
                     onPressed: () {
@@ -1104,6 +1155,7 @@ class _KanbanBoardState extends State<KanbanBoard> {
     final assignee = memo.assignee.isEmpty ? 'NA' : memo.assignee;
     final doneChecklist =
         memo.checklist.where((c) => c['done'] == true).length;
+    final canEdit = _canEditMemo(memo);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -1146,7 +1198,7 @@ class _KanbanBoardState extends State<KanbanBoard> {
                         ),
                       ),
                     ),
-                    if (!isDraggingFeedback) ...[
+                    if (!isDraggingFeedback && canEdit) ...[
                       const SizedBox(width: 6),
                       GestureDetector(
                         onTap: () =>
@@ -1227,11 +1279,11 @@ class _KanbanBoardState extends State<KanbanBoard> {
                 DeadlineBadge(
                   date: dueDate,
                   completed: colId == 'done',
-                  onTap: isDraggingFeedback
+                  onTap: (isDraggingFeedback || !canEdit)
                       ? null
                       : () => _openTaskFormSheet(colId, existingMemo: memo),
                 )
-              else if (!isDraggingFeedback)
+              else if (!isDraggingFeedback && canEdit)
                 GestureDetector(
                   onTap: () => _openTaskFormSheet(colId, existingMemo: memo),
                   child: const Text(
