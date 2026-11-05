@@ -153,7 +153,7 @@ class _WorkspaceDetailScreenState extends State<WorkspaceDetailScreen> {
 
   Widget _buildTopNavBar(Workspace workspace) {
     final isOwner =
-        workspace.ownerId == FirebaseAuth.instance.currentUser?.uid;
+        workspace.isOwnedBy(FirebaseAuth.instance.currentUser?.uid);
     return Row(
       children: [
         GestureDetector(
@@ -191,7 +191,7 @@ class _WorkspaceDetailScreenState extends State<WorkspaceDetailScreen> {
               ),
               const SizedBox(height: 2),
               Text(
-                '${isOwner ? 'Owner' : 'Member'} · ${workspace.members.length} members',
+                '${isOwner ? 'Owner' : 'Member'} · ${workspace.members.isEmpty ? 1 : workspace.members.length} members',
                 style: const TextStyle(
                   fontSize: 10,
                   color: AppTheme.muted,
@@ -201,31 +201,21 @@ class _WorkspaceDetailScreenState extends State<WorkspaceDetailScreen> {
             ],
           ),
         ),
-        Material(
-          color: AppTheme.ink,
-          borderRadius: BorderRadius.circular(20),
-          child: InkWell(
-            onTap: () => showInviteWorkspaceSheet(
-              context: context,
-              workspace: workspace,
+        const SizedBox(width: 8),
+        GestureDetector(
+          onTap: () => _showWorkspaceOptionsSheet(workspace),
+          child: Container(
+            width: 40,
+            height: 40,
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+              boxShadow: [AppTheme.shadowSoft],
             ),
-            borderRadius: BorderRadius.circular(20),
-            child: const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              child: Row(
-                children: [
-                  Icon(Icons.add_rounded, color: Colors.white, size: 14),
-                  SizedBox(width: 4),
-                  Text(
-                    'Invite',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
-                    ),
-                  ),
-                ],
-              ),
+            child: const Icon(
+              Icons.more_horiz_rounded,
+              color: AppTheme.ink,
+              size: 20,
             ),
           ),
         ),
@@ -233,9 +223,337 @@ class _WorkspaceDetailScreenState extends State<WorkspaceDetailScreen> {
     );
   }
 
+  void _showWorkspaceOptionsSheet(Workspace workspace) {
+    final isOwner =
+        workspace.isOwnedBy(FirebaseAuth.instance.currentUser?.uid);
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => SheetFrame(
+        title: workspace.title,
+        description: isOwner
+            ? 'Kelola pengaturan workspace, undang anggota, atau hapus workspace.'
+            : 'Opsi anggota untuk workspace ini.',
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildOptionSheetTile(
+              icon: Icons.person_add_alt_1_rounded,
+              iconBg: AppTheme.mint,
+              iconFg: AppTheme.olive,
+              title: 'Invite teammates',
+              subtitle: 'Share invite code (${workspace.inviteCode}) or invite via email',
+              onTap: () {
+                Navigator.pop(ctx);
+                showInviteWorkspaceSheet(context: context, workspace: workspace);
+              },
+            ),
+            if (isOwner) ...[
+              const SizedBox(height: 10),
+              _buildOptionSheetTile(
+                icon: Icons.edit_outlined,
+                iconBg: AppTheme.peach,
+                iconFg: AppTheme.caramel,
+                title: 'Rename workspace',
+                subtitle: 'Change the title of this workspace',
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _showRenameWorkspaceSheet(workspace);
+                },
+              ),
+              const SizedBox(height: 10),
+              _buildOptionSheetTile(
+                icon: Icons.delete_outline_rounded,
+                iconBg: AppTheme.blush,
+                iconFg: AppTheme.coral,
+                title: 'Hapus workspace',
+                subtitle: 'Hapus permanen workspace ini beserta seluruh memonya',
+                isDestructive: true,
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _confirmDeleteWorkspace(workspace);
+                },
+              ),
+            ] else ...[
+              const SizedBox(height: 10),
+              _buildOptionSheetTile(
+                icon: Icons.logout_rounded,
+                iconBg: AppTheme.blush,
+                iconFg: AppTheme.coral,
+                title: 'Keluar dari workspace',
+                subtitle: 'Berhenti menjadi anggota di workspace ini',
+                isDestructive: true,
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  await context.read<WorkspaceCubit>().leave(workspace.id);
+                  if (!mounted) return;
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Anda telah keluar dari "${workspace.title}".'),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                },
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOptionSheetTile({
+    required IconData icon,
+    required Color iconBg,
+    required Color iconFg,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+    bool isDestructive = false,
+  }) {
+    return Material(
+      color: isDestructive ? AppTheme.blush.withValues(alpha: 0.45) : Colors.white,
+      borderRadius: BorderRadius.circular(20),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: const [AppTheme.shadowSoft],
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: iconBg,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(icon, color: iconFg, size: 19),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: isDestructive ? AppTheme.coral : AppTheme.ink,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w500,
+                        color: AppTheme.muted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 18,
+                color: isDestructive ? AppTheme.coral : AppTheme.faint,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showRenameWorkspaceSheet(Workspace workspace) {
+    final ctrl = TextEditingController(text: workspace.title);
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => SheetFrame(
+        title: 'Rename workspace',
+        description: 'Masukkan nama baru untuk workspace ini.',
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: const [AppTheme.shadowSoft],
+              ),
+              child: TextField(
+                controller: ctrl,
+                autofocus: true,
+                maxLength: 32,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.ink,
+                ),
+                decoration: const InputDecoration(
+                  labelText: 'WORKSPACE NAME',
+                  counterText: '',
+                  border: InputBorder.none,
+                  isDense: true,
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () async {
+                  final newTitle = ctrl.text.trim();
+                  if (newTitle.isEmpty) return;
+                  await context
+                      .read<WorkspaceCubit>()
+                      .rename(workspace.id, newTitle);
+                  if (!ctx.mounted) return;
+                  Navigator.pop(ctx);
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Nama workspace diubah menjadi "$newTitle"'),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.ink,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                ),
+                child: const Text(
+                  'Simpan nama',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _confirmDeleteWorkspace(Workspace workspace) {
+    bool isDeleting = false;
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) => SheetFrame(
+          title: 'Hapus workspace "${workspace.title}"?',
+          description:
+              'Tindakan ini tidak dapat dibatalkan. Seluruh memo, checklist, dan aktivitas di dalam workspace ini akan ikut terhapus permanen.',
+          child: Row(
+            children: [
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: isDeleting ? null : () => Navigator.pop(ctx),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: AppTheme.ink,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                  ),
+                  child: const Text(
+                    'Batal',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: isDeleting
+                      ? null
+                      : () async {
+                          setSheetState(() => isDeleting = true);
+                          try {
+                            await context
+                                .read<WorkspaceCubit>()
+                                .deleteWorkspace(workspace.id);
+                            if (ctx.mounted) Navigator.pop(ctx);
+                            if (mounted) {
+                              Navigator.pop(context);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    'Workspace "${workspace.title}" berhasil dihapus.',
+                                  ),
+                                  behavior: SnackBarBehavior.floating,
+                                  backgroundColor: AppTheme.ink,
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            setSheetState(() => isDeleting = false);
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Gagal menghapus workspace: $e'),
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
+                            }
+                          }
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.coral,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                  ),
+                  child: isDeleting
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text(
+                          'Ya, Hapus Workspace',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildWorkspaceInfoCard(Workspace workspace) {
     final isOwner =
-        workspace.ownerId == FirebaseAuth.instance.currentUser?.uid;
+        workspace.isOwnedBy(FirebaseAuth.instance.currentUser?.uid);
     return Container(
       width: double.infinity,
       clipBehavior: Clip.antiAlias,
@@ -317,40 +635,82 @@ class _WorkspaceDetailScreenState extends State<WorkspaceDetailScreen> {
                   ),
                 ),
                 const SizedBox(height: 20),
-                GestureDetector(
-                  onTap: () => showInviteWorkspaceSheet(
-                    context: context,
-                    workspace: workspace,
-                  ),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 10,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.copy_rounded,
-                          color: AppTheme.ink,
-                          size: 13,
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    GestureDetector(
+                      onTap: () => showInviteWorkspaceSheet(
+                        context: context,
+                        workspace: workspace,
+                      ),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 10,
                         ),
-                        const SizedBox(width: 6),
-                        Text(
-                          'Invite code: ${workspace.inviteCode}',
-                          style: const TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
-                            color: AppTheme.ink,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(24),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.copy_rounded,
+                              color: AppTheme.ink,
+                              size: 13,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Invite code: ${workspace.inviteCode}',
+                              style: const TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                color: AppTheme.ink,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    if (isOwner)
+                      GestureDetector(
+                        onTap: () => _confirmDeleteWorkspace(workspace),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppTheme.coral.withValues(alpha: 0.22),
+                            borderRadius: BorderRadius.circular(24),
+                            border: Border.all(
+                              color: AppTheme.coral.withValues(alpha: 0.55),
+                            ),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.delete_outline_rounded,
+                                color: Color(0xFFFFB4AB),
+                                size: 13,
+                              ),
+                              SizedBox(width: 5),
+                              Text(
+                                'Hapus workspace',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFFFFDAD6),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      ],
-                    ),
-                  ),
+                      ),
+                  ],
                 ),
               ],
             ),

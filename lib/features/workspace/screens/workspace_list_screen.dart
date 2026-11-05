@@ -375,7 +375,8 @@ class WorkspaceListScreen extends StatelessWidget {
     required int index,
   }) {
     final userId = FirebaseAuth.instance.currentUser?.uid;
-    final role = workspace.ownerId == userId ? 'Owner' : 'Member';
+    final isOwner = workspace.isOwnedBy(userId);
+    final role = isOwner ? 'Owner' : 'Member';
     final memoState = context.watch<MemoCubit>().state;
     final liveMemoCount = memoState is MemoLoaded
         ? memoState.memos.where((m) => m.workspaceId == workspace.id).length
@@ -445,6 +446,24 @@ class WorkspaceListScreen extends StatelessWidget {
                       ],
                     ),
                   ),
+                  if (isOwner)
+                    GestureDetector(
+                      onTap: () => _confirmDeleteFromList(context, workspace),
+                      child: Container(
+                        width: 32,
+                        height: 32,
+                        margin: const EdgeInsets.only(right: 4),
+                        decoration: BoxDecoration(
+                          color: AppTheme.blush.withValues(alpha: 0.6),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.delete_outline_rounded,
+                          color: AppTheme.coral,
+                          size: 16,
+                        ),
+                      ),
+                    ),
                   const Icon(
                     Icons.chevron_right_rounded,
                     color: AppTheme.faint,
@@ -505,6 +524,98 @@ class WorkspaceListScreen extends StatelessWidget {
           fontWeight: FontWeight.bold,
           color: AppTheme.muted,
           letterSpacing: 0.5,
+        ),
+      ),
+    );
+  }
+
+  void _confirmDeleteFromList(BuildContext context, Workspace workspace) {
+    bool isDeleting = false;
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) => SheetFrame(
+          title: 'Hapus workspace "${workspace.title}"?',
+          description:
+              'Seluruh memo, checklist, dan aktivitas di dalam workspace ini akan ikut terhapus permanen.',
+          child: Row(
+            children: [
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: isDeleting ? null : () => Navigator.pop(ctx),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: AppTheme.ink,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                  ),
+                  child: const Text(
+                    'Batal',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: isDeleting
+                      ? null
+                      : () async {
+                          setSheetState(() => isDeleting = true);
+                          try {
+                            await context
+                                .read<WorkspaceCubit>()
+                                .deleteWorkspace(workspace.id);
+                            if (ctx.mounted) Navigator.pop(ctx);
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    'Workspace "${workspace.title}" berhasil dihapus.',
+                                  ),
+                                  behavior: SnackBarBehavior.floating,
+                                  backgroundColor: AppTheme.ink,
+                                ),
+                              );
+                            }
+                          } catch (_) {
+                            setSheetState(() => isDeleting = false);
+                          }
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.coral,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                  ),
+                  child: isDeleting
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text(
+                          'Ya, Hapus',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

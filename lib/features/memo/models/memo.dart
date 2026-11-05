@@ -24,6 +24,7 @@ class Memo {
   final String status; // 'todo', 'doing', 'done'
   final String assignee;
   final String assigneeTone;
+  final List<Map<String, String>> assignees;
   final List<Map<String, dynamic>> attachments;
   final List<Map<String, dynamic>> checklist;
 
@@ -50,9 +51,41 @@ class Memo {
     this.status = 'todo',
     this.assignee = '',
     this.assigneeTone = 'dark',
+    this.assignees = const [],
     this.attachments = const [],
     this.checklist = const [],
   });
+
+  /// Mengembalikan daftar anggota yang ditugaskan (minimal 1 anggota)
+  List<Map<String, String>> get effectiveAssignees {
+    if (assignees.isNotEmpty) return assignees;
+    final raw = assignee.trim();
+    if (raw.isEmpty) {
+      return [
+        {'initials': 'NA', 'name': authorName.isEmpty ? 'Naya' : authorName, 'tone': assigneeTone.isEmpty ? 'dark' : assigneeTone}
+      ];
+    }
+    final tones = ['dark', 'peach', 'mint', 'lilac'];
+    final parts = raw.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+    if (parts.length <= 1) {
+      return [
+        {
+          'initials': raw,
+          'name': authorName.isEmpty ? raw : authorName,
+          'tone': assigneeTone.isEmpty ? 'dark' : assigneeTone,
+        }
+      ];
+    }
+    return List.generate(parts.length, (i) {
+      return {
+        'initials': parts[i],
+        'name': parts[i],
+        'tone': i == 0 && assigneeTone.isNotEmpty
+            ? assigneeTone
+            : tones[i % tones.length],
+      };
+    });
+  }
 
   String get category => tag;
   DateTime get createdAt => updatedAt;
@@ -128,6 +161,41 @@ class Memo {
       rawAssignee = 'NA';
     }
 
+    final rawAssigneesList = map['assignees'];
+    final List<Map<String, String>> parsedAssignees = [];
+    if (rawAssigneesList is List) {
+      for (final item in rawAssigneesList) {
+        if (item is Map) {
+          final initials = (item['initials'] ?? '').toString().trim();
+          final name = (item['name'] ?? initials).toString().trim();
+          final tone = (item['tone'] ?? 'dark').toString().trim();
+          if (initials.isNotEmpty) {
+            parsedAssignees.add({
+              'initials': initials,
+              'name': name.isEmpty ? initials : name,
+              'tone': tone.isEmpty ? 'dark' : tone,
+            });
+          }
+        }
+      }
+    }
+    if (parsedAssignees.isEmpty) {
+      final tones = ['dark', 'peach', 'mint', 'lilac'];
+      final splitInitials = rawAssignee
+          .split(',')
+          .map((e) => e.trim())
+          .where((e) => e.isNotEmpty)
+          .toList();
+      final defaultTone = map['assigneeTone'] as String? ?? 'dark';
+      for (int i = 0; i < splitInitials.length; i++) {
+        parsedAssignees.add({
+          'initials': splitInitials[i],
+          'name': i == 0 && authorName.isNotEmpty ? authorName : splitInitials[i],
+          'tone': i == 0 ? defaultTone : tones[i % tones.length],
+        });
+      }
+    }
+
     return Memo(
       id: documentId,
       title: map['title'] ?? '',
@@ -151,8 +219,11 @@ class Memo {
       progress: computedProgress,
       checklistTitle: map['checklistTitle'] as String? ?? '',
       status: rawStatus,
-      assignee: rawAssignee,
-      assigneeTone: map['assigneeTone'] as String? ?? 'dark',
+      assignee: parsedAssignees.map((a) => a['initials']).join(', '),
+      assigneeTone: parsedAssignees.isNotEmpty
+          ? (parsedAssignees.first['tone'] ?? 'dark')
+          : (map['assigneeTone'] as String? ?? 'dark'),
+      assignees: parsedAssignees,
       attachments: attachments,
       checklist: checklist,
     );
@@ -187,6 +258,7 @@ class Memo {
       'status': status,
       'assignee': assignee,
       'assigneeTone': assigneeTone,
+      'assignees': assignees,
       'attachments': attachments,
       'checklist': checklist,
     };
@@ -214,6 +286,7 @@ class Memo {
     String? status,
     String? assignee,
     String? assigneeTone,
+    List<Map<String, String>>? assignees,
     List<Map<String, dynamic>>? attachments,
     List<Map<String, dynamic>>? checklist,
   }) {
@@ -240,6 +313,7 @@ class Memo {
       status: status ?? this.status,
       assignee: assignee ?? this.assignee,
       assigneeTone: assigneeTone ?? this.assigneeTone,
+      assignees: assignees ?? this.assignees,
       attachments: attachments ?? this.attachments,
       checklist: checklist ?? this.checklist,
     );

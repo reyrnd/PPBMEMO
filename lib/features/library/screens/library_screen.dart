@@ -7,6 +7,7 @@ import '../../memo/models/memo.dart';
 import '../../memo/screens/memo_editor_screen.dart';
 import '../../search/screens/search_screen.dart';
 import '../../workspace/cubit/workspace_cubit.dart';
+import '../../workspace/models/workspace.dart';
 
 class LibraryScreen extends StatefulWidget {
   const LibraryScreen({super.key});
@@ -20,7 +21,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
   final List<String> _filters = ['All', 'Notes', 'Checklists', 'Media', 'Files'];
   final TextEditingController _searchController = TextEditingController();
   String _selectedSort = 'Recently updated';
-  String? _selectedCollection;
+  String? _selectedWorkspaceId;
 
   @override
   void dispose() {
@@ -97,16 +98,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 _ => true,
               };
 
-              final matchesCollection = _selectedCollection == null ||
-                  switch (_selectedCollection) {
-                    'Notes & Ideas' => _isNoteMemo(memo),
-                    'Checklists' => _isChecklistMemo(memo),
-                    'Media' => _isMediaMemo(memo),
-                    'Documents' => _isFileMemo(memo),
-                    _ => true,
-                  };
+              final matchesWorkspace = _selectedWorkspaceId == null ||
+                  memo.workspaceId == _selectedWorkspaceId;
 
-              return matchesQuery && matchesFilter && matchesCollection;
+              return matchesQuery && matchesFilter && matchesWorkspace;
             }).toList()
               ..sort((a, b) {
                 if (_selectedSort == 'Date created') {
@@ -140,31 +135,26 @@ class _LibraryScreenState extends State<LibraryScreen> {
                   const SizedBox(height: 20),
                   _buildSearchBarRow(),
                   const SizedBox(height: 16),
-                  _buildFilterPills(),
+                  _buildFilterPills(firebaseMemos),
+                  if (workspaces.isNotEmpty) ...[
+                    const SizedBox(height: 22),
+                    _buildSectionTitle(
+                      'Filter by workspace',
+                      actionText: _selectedWorkspaceId != null
+                          ? 'Clear filter'
+                          : 'All workspaces',
+                      onAction: () {
+                        if (_selectedWorkspaceId != null) {
+                          setState(() => _selectedWorkspaceId = null);
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    _buildWorkspacesFilterRow(workspaces, firebaseMemos),
+                  ],
                   const SizedBox(height: 24),
                   _buildSectionTitle(
-                    'Collections',
-                    actionText:
-                        _selectedCollection != null ? 'Clear filter' : 'All items',
-                    onAction: () {
-                      if (_selectedCollection != null) {
-                        setState(() => _selectedCollection = null);
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  isLoading
-                      ? const Center(
-                          child: Padding(
-                            padding: EdgeInsets.all(24.0),
-                            child:
-                                CircularProgressIndicator(color: AppTheme.ink),
-                          ),
-                        )
-                      : _buildCollectionsGrid(firebaseMemos),
-                  const SizedBox(height: 28),
-                  _buildSectionTitle(
-                    'Recently added (${visibleMemos.length})',
+                    'All items (${visibleMemos.length})',
                     actionText: 'Sort',
                     onAction: () => showActionSheet(
                       context: context,
@@ -336,7 +326,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
             onPressed: () {
               setState(() {
                 _activeFilter = 'All';
-                _selectedCollection = null;
+                _selectedWorkspaceId = null;
                 _searchController.clear();
               });
             },
@@ -351,12 +341,29 @@ class _LibraryScreenState extends State<LibraryScreen> {
     );
   }
 
-  Widget _buildFilterPills() {
+  Widget _buildFilterPills(List<Memo> memos) {
+    final counts = <String, int>{
+      'All': memos.length,
+      'Notes': memos.where(_isNoteMemo).length,
+      'Checklists': memos.where(_isChecklistMemo).length,
+      'Media': memos.where(_isMediaMemo).length,
+      'Files': memos.where(_isFileMemo).length,
+    };
+    final icons = <String, IconData>{
+      'All': Icons.apps_rounded,
+      'Notes': Icons.auto_awesome_rounded,
+      'Checklists': Icons.checklist_rtl_rounded,
+      'Media': Icons.image_rounded,
+      'Files': Icons.insert_drive_file_rounded,
+    };
+
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
         children: _filters.map((filter) {
           final isSelected = _activeFilter == filter;
+          final count = counts[filter] ?? 0;
+          final icon = icons[filter] ?? Icons.circle;
           return Padding(
             padding: const EdgeInsets.only(right: 8.0),
             child: GestureDetector(
@@ -364,19 +371,51 @@ class _LibraryScreenState extends State<LibraryScreen> {
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 150),
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
                 decoration: BoxDecoration(
                   color: isSelected ? AppTheme.ink : Colors.white,
                   borderRadius: BorderRadius.circular(20),
                   boxShadow: const [AppTheme.shadowSoft],
                 ),
-                child: Text(
-                  filter,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: isSelected ? Colors.white : AppTheme.muted,
-                  ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      icon,
+                      size: 14,
+                      color: isSelected ? Colors.white : AppTheme.muted,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      filter,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: isSelected ? Colors.white : AppTheme.muted,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 1.5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? Colors.white.withValues(alpha: 0.18)
+                            : AppTheme.canvas,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        '$count',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          color: isSelected ? Colors.white : AppTheme.ink,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -431,142 +470,104 @@ class _LibraryScreenState extends State<LibraryScreen> {
     );
   }
 
-  Widget _buildCollectionsGrid(List<Memo> memos) {
-    final int notesCount = memos.where(_isNoteMemo).length;
-    final int checklistsCount = memos.where(_isChecklistMemo).length;
-    final int mediaCount = memos.where(_isMediaMemo).length;
-    final int filesCount = memos.where(_isFileMemo).length;
-
-    final collections = [
-      {
-        'title': 'Notes & Ideas',
-        'count': '$notesCount items',
-        'icon': Icons.auto_awesome_rounded,
-        'color': AppTheme.peach,
-      },
-      {
-        'title': 'Checklists',
-        'count': '$checklistsCount items',
-        'icon': Icons.checklist_rtl_rounded,
-        'color': AppTheme.mint,
-      },
-      {
-        'title': 'Media',
-        'count': '$mediaCount items',
-        'icon': Icons.image_rounded,
-        'color': AppTheme.lilac,
-      },
-      {
-        'title': 'Documents',
-        'count': '$filesCount items',
-        'icon': Icons.insert_drive_file_rounded,
-        'color': AppTheme.soft,
-      },
+  Widget _buildWorkspacesFilterRow(
+    List<Workspace> workspaces,
+    List<Memo> memos,
+  ) {
+    final palette = [
+      AppTheme.peach,
+      AppTheme.mint,
+      AppTheme.lilac,
+      AppTheme.soft,
     ];
 
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: collections.length,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        mainAxisSpacing: 12,
-        crossAxisSpacing: 12,
-        childAspectRatio: 1.25,
-      ),
-      itemBuilder: (context, index) {
-        final item = collections[index];
-        final title = item['title'] as String;
-        final isSelected = _selectedCollection == title;
+    return SizedBox(
+      height: 86,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: workspaces.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 10),
+        itemBuilder: (context, index) {
+          final ws = workspaces[index];
+          final isSelected = _selectedWorkspaceId == ws.id;
+          final wsMemoCount =
+              memos.where((m) => m.workspaceId == ws.id).length;
+          final accentBg = palette[index % palette.length];
 
-        return GestureDetector(
-          onTap: () {
-            setState(() {
-              if (_selectedCollection == title) {
-                _selectedCollection = null;
-              } else {
-                _selectedCollection = title;
-              }
-            });
-          },
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(22),
-              border: isSelected
-                  ? Border.all(color: AppTheme.ink, width: 1.5)
-                  : null,
-              boxShadow: const [AppTheme.shadowSoft],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Container(
-                      width: 38,
-                      height: 38,
-                      decoration: BoxDecoration(
-                        color: item['color'] as Color,
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Icon(
-                        item['icon'] as IconData,
-                        color: AppTheme.ink,
-                        size: 19,
-                      ),
+          return GestureDetector(
+            onTap: () {
+              setState(() {
+                if (_selectedWorkspaceId == ws.id) {
+                  _selectedWorkspaceId = null;
+                } else {
+                  _selectedWorkspaceId = ws.id;
+                }
+              });
+            },
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 160),
+              width: 175,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: isSelected ? AppTheme.ink : Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: const [AppTheme.shadowSoft],
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? Colors.white.withValues(alpha: 0.16)
+                          : accentBg,
+                      borderRadius: BorderRadius.circular(13),
                     ),
-                    if (isSelected)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 3,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppTheme.ink,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Text(
-                          'Active',
+                    child: Icon(
+                      Icons.workspaces_rounded,
+                      size: 18,
+                      color: isSelected ? Colors.white : AppTheme.ink,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          ws.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            fontSize: 9,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                            color: isSelected ? Colors.white : AppTheme.ink,
                           ),
                         ),
-                      ),
-                  ],
-                ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: AppTheme.ink,
-                      ),
+                        const SizedBox(height: 3),
+                        Text(
+                          '$wsMemoCount items · ${ws.category}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: isSelected
+                                ? Colors.white.withValues(alpha: 0.75)
+                                : AppTheme.faint,
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      item['count'] as String,
-                      style: const TextStyle(
-                        fontSize: 10,
-                        color: AppTheme.faint,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+                  ),
+                ],
+              ),
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 
@@ -657,7 +658,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 onPressed: () {
                   setState(() {
                     _activeFilter = 'All';
-                    _selectedCollection = null;
+                    _selectedWorkspaceId = null;
                     _searchController.clear();
                   });
                 },

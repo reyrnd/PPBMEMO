@@ -157,6 +157,7 @@ class MemoCubit extends Cubit<MemoState> {
     String status = 'todo',
     String assignee = '',
     String assigneeTone = 'dark',
+    List<Map<String, String>>? assignees,
     double? boardX,
     double? boardY,
     List<Map<String, dynamic>> attachments = const [],
@@ -171,13 +172,32 @@ class MemoCubit extends Cubit<MemoState> {
 
     String resolvedAssignee = assignee;
     if (resolvedAssignee.isEmpty) {
-      final parts =
-          authorName.trim().split(' ').where((p) => p.isNotEmpty).toList();
-      resolvedAssignee = parts.isNotEmpty
-          ? (parts.first[0] + (parts.length > 1 ? parts.last[0] : ''))
-              .toUpperCase()
-          : 'NA';
+      if (assignees != null && assignees.isNotEmpty) {
+        resolvedAssignee = assignees
+            .map((a) => (a['initials'] ?? '').trim())
+            .where((s) => s.isNotEmpty)
+            .join(', ');
+      }
+      if (resolvedAssignee.isEmpty) {
+        final parts =
+            authorName.trim().split(' ').where((p) => p.isNotEmpty).toList();
+        resolvedAssignee = parts.isNotEmpty
+            ? (parts.first[0] + (parts.length > 1 ? parts.last[0] : ''))
+                .toUpperCase()
+            : 'NA';
+      }
     }
+
+    final resolvedAssignees = (assignees != null && assignees.isNotEmpty)
+        ? assignees
+        : [
+            {
+              'initials': resolvedAssignee.split(',').first.trim(),
+              'name': authorName,
+              'tone': assigneeTone.isEmpty ? 'dark' : assigneeTone,
+            }
+          ];
+    final resolvedTone = resolvedAssignees.first['tone'] ?? assigneeTone;
 
     double? progress;
     if (checklist.isNotEmpty) {
@@ -219,7 +239,8 @@ class MemoCubit extends Cubit<MemoState> {
           'checklistTitle': checklistTitle,
           'status': status,
           'assignee': resolvedAssignee,
-          'assigneeTone': assigneeTone,
+          'assigneeTone': resolvedTone,
+          'assignees': resolvedAssignees,
           'attachments': attachments,
           'checklist': checklist,
           'createdAt': FieldValue.serverTimestamp(),
@@ -270,7 +291,8 @@ class MemoCubit extends Cubit<MemoState> {
       checklistTitle: checklistTitle,
       status: status,
       assignee: resolvedAssignee,
-      assigneeTone: assigneeTone,
+      assigneeTone: resolvedTone,
+      assignees: resolvedAssignees,
       boardX: boardX,
       boardY: boardY,
       attachments: attachments,
@@ -293,6 +315,7 @@ class MemoCubit extends Cubit<MemoState> {
     String? status,
     String? assignee,
     String? assigneeTone,
+    List<Map<String, String>>? assignees,
     List<Map<String, dynamic>>? attachments,
     List<Map<String, dynamic>>? checklist,
   }) async {
@@ -335,6 +358,7 @@ class MemoCubit extends Cubit<MemoState> {
           status: status ?? m.status,
           assignee: assignee ?? m.assignee,
           assigneeTone: assigneeTone ?? m.assigneeTone,
+          assignees: assignees ?? m.assignees,
           attachments: attachments ?? m.attachments,
           checklist: checklist ?? m.checklist,
           progress: progress ?? m.progress,
@@ -363,6 +387,7 @@ class MemoCubit extends Cubit<MemoState> {
         if (status != null) updateData['status'] = status;
         if (assignee != null) updateData['assignee'] = assignee;
         if (assigneeTone != null) updateData['assigneeTone'] = assigneeTone;
+        if (assignees != null) updateData['assignees'] = assignees;
         if (attachments != null) updateData['attachments'] = attachments;
         if (checklist != null) {
           updateData['checklist'] = checklist;

@@ -6,9 +6,11 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:memospace/core/app_theme.dart';
 import 'package:memospace/core/utils/attachment_picker.dart';
 import 'package:memospace/core/widgets/app_bottom_sheet.dart';
+import 'package:memospace/core/widgets/urgent_flame_card.dart';
 import 'package:memospace/features/memo/cubit/memo_cubit.dart';
 import 'package:memospace/features/memo/models/memo.dart';
 import 'package:memospace/features/memo/screens/memo_editor_screen.dart';
+import 'package:memospace/features/workspace/cubit/workspace_cubit.dart';
 
 class CanvasBoard extends StatefulWidget {
   final String workspaceId;
@@ -271,14 +273,93 @@ class _CanvasBoardState extends State<CanvasBoard> {
     );
   }
 
+  Color _avatarBgForTone(String tone) {
+    switch (tone) {
+      case 'peach':
+        return AppTheme.peach;
+      case 'mint':
+        return AppTheme.mint;
+      case 'lilac':
+        return AppTheme.lilac;
+      default:
+        return AppTheme.ink;
+    }
+  }
+
+  Color _avatarTextColorForTone(String tone) {
+    switch (tone) {
+      case 'peach':
+        return AppTheme.caramel;
+      case 'mint':
+        return AppTheme.olive;
+      case 'lilac':
+        return AppTheme.plum;
+      default:
+        return Colors.white;
+    }
+  }
+
+  List<Map<String, String>> _resolveAssignees() {
+    final workspaces = context.read<WorkspaceCubit>().state;
+    final matched = workspaces.where((w) => w.id == widget.workspaceId);
+    if (matched.isNotEmpty && matched.first.members.isNotEmpty) {
+      final tones = ['dark', 'peach', 'mint', 'lilac'];
+      final members = matched.first.members;
+      return List.generate(members.length, (i) {
+        final m = members[i];
+        return {
+          'initials': m.initials.isEmpty ? 'M' : m.initials,
+          'name': m.name.isEmpty ? 'Member' : m.name,
+          'tone': tones[i % tones.length],
+        };
+      });
+    }
+    return const [
+      {'initials': 'NA', 'name': 'Naya', 'tone': 'dark'},
+      {'initials': 'RK', 'name': 'Raka', 'tone': 'peach'},
+      {'initials': 'SL', 'name': 'Sora', 'tone': 'mint'},
+      {'initials': 'AL', 'name': 'Aruna', 'tone': 'lilac'},
+    ];
+  }
+
   void _showCreateCanvasCardSheet({required bool isChecklist}) {
     final titleCtrl = TextEditingController();
     final bodyCtrl = TextEditingController();
     final checklistInputCtrl = TextEditingController();
     final List<Map<String, dynamic>> checklistItems = [];
     final List<Map<String, dynamic>> attachedFiles = [];
+    final assignees = _resolveAssignees();
+    final List<Map<String, String>> selectedAssignees = [
+      Map<String, String>.from(assignees.first),
+    ];
     String selectedDate = '';
     bool isPickingFile = false;
+
+    bool isMemberSelected(String initials, String name) {
+      return selectedAssignees.any(
+        (m) =>
+            m['initials'] == initials &&
+            (m['name'] == name || m['name'] == initials),
+      );
+    }
+
+    void toggleMember(Map<String, String> member, StateSetter setSheetState) {
+      setSheetState(() {
+        final idx = selectedAssignees.indexWhere(
+          (m) =>
+              m['initials'] == member['initials'] &&
+              (m['name'] == member['name'] ||
+                  m['name'] == member['initials']),
+        );
+        if (idx >= 0) {
+          if (selectedAssignees.length > 1) {
+            selectedAssignees.removeAt(idx);
+          }
+        } else {
+          selectedAssignees.add(Map<String, String>.from(member));
+        }
+      });
+    }
 
     void addCurrentChecklistItem(StateSetter setSheetState) {
       final text = checklistInputCtrl.text.trim();
@@ -710,10 +791,18 @@ class _CanvasBoardState extends State<CanvasBoard> {
                               bg: AppTheme.surface,
                               fg: AppTheme.ink,
                               onTap: () async {
+                                final now = DateTime.now();
+                                final today =
+                                    DateTime(now.year, now.month, now.day);
+                                final parsed = DateTime.tryParse(selectedDate);
+                                final initial =
+                                    (parsed != null && !parsed.isBefore(today))
+                                        ? parsed
+                                        : today;
                                 final picked = await showDatePicker(
                                   context: ctx,
-                                  initialDate: DateTime.now(),
-                                  firstDate: DateTime(2024),
+                                  initialDate: initial,
+                                  firstDate: today,
                                   lastDate: DateTime(2032),
                                 );
                                 if (picked != null) {
@@ -787,6 +876,133 @@ class _CanvasBoardState extends State<CanvasBoard> {
                     ],
                   ),
                 ),
+                // 3.5 ASSIGN TEAMMATES (MULTI-SELECT)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: const [AppTheme.shadowSoft],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'ASSIGN TEAMMATES (${selectedAssignees.length} DIPILIH)',
+                            style: const TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w700,
+                              color: AppTheme.faint,
+                              letterSpacing: 0.8,
+                            ),
+                          ),
+                          GestureDetector(
+                            onTap: () => setSheetState(() {
+                              if (selectedAssignees.length == assignees.length) {
+                                selectedAssignees
+                                  ..clear()
+                                  ..add(
+                                    Map<String, String>.from(assignees.first),
+                                  );
+                              } else {
+                                selectedAssignees
+                                  ..clear()
+                                  ..addAll(
+                                    assignees.map(
+                                      (e) => Map<String, String>.from(e),
+                                    ),
+                                  );
+                              }
+                            }),
+                            child: Text(
+                              selectedAssignees.length == assignees.length
+                                  ? 'Reset'
+                                  : 'Pilih semua',
+                              style: const TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w700,
+                                color: AppTheme.olive,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: assignees.map((a) {
+                          final initials = a['initials']!;
+                          final name = a['name']!;
+                          final tone = a['tone']!;
+                          final isSelected = isMemberSelected(initials, name);
+                          return GestureDetector(
+                            onTap: () => toggleMember(a, setSheetState),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 9,
+                                vertical: 5,
+                              ),
+                              decoration: BoxDecoration(
+                                color: isSelected
+                                    ? AppTheme.ink
+                                    : AppTheme.surface,
+                                borderRadius: BorderRadius.circular(18),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Container(
+                                    width: 20,
+                                    height: 20,
+                                    decoration: BoxDecoration(
+                                      color: _avatarBgForTone(tone),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    alignment: Alignment.center,
+                                    child: Text(
+                                      initials,
+                                      style: TextStyle(
+                                        fontSize: 7.5,
+                                        fontWeight: FontWeight.w700,
+                                        color: _avatarTextColorForTone(tone),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 5),
+                                  Text(
+                                    name,
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w700,
+                                      color: isSelected
+                                          ? Colors.white
+                                          : AppTheme.ink,
+                                    ),
+                                  ),
+                                  if (isSelected) ...[
+                                    const SizedBox(width: 4),
+                                    const Icon(
+                                      Icons.check_circle_rounded,
+                                      size: 12,
+                                      color: AppTheme.mint,
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ],
+                  ),
+                ),
                 const SizedBox(height: 16),
 
                 // 4. ACTION BUTTONS
@@ -850,6 +1066,15 @@ class _CanvasBoardState extends State<CanvasBoard> {
                                     dueDate: selectedDate,
                                     checklistTitle:
                                         isChecklist ? trimmedTitle : '',
+                                    assignee: selectedAssignees
+                                        .map((a) => a['initials'] ?? 'NA')
+                                        .join(', '),
+                                    assigneeTone:
+                                        selectedAssignees.first['tone'] ??
+                                            'dark',
+                                    assignees: List<Map<String, String>>.from(
+                                      selectedAssignees,
+                                    ),
                                     boardX: newX,
                                     boardY: newY,
                                     attachments: List<Map<String, dynamic>>.from(
@@ -1334,10 +1559,275 @@ class _CanvasBoardState extends State<CanvasBoard> {
     );
   }
 
+  Widget _buildCanvasAssigneeAvatars(
+    List<Map<String, String>> assignees, {
+    required bool isUrgent,
+  }) {
+    final visible = assignees.take(4).toList();
+    final extraCount = assignees.length - visible.length;
+    final totalWidth =
+        24.0 + (visible.length - 1) * 14.0 + (extraCount > 0 ? 16.0 : 0.0);
+
+    return SizedBox(
+      width: totalWidth,
+      height: 24,
+      child: Stack(
+        children: [
+          for (int i = 0; i < visible.length; i++)
+            Positioned(
+              left: i * 14.0,
+              child: Container(
+                width: 24,
+                height: 24,
+                decoration: BoxDecoration(
+                  color: _avatarBgForTone(visible[i]['tone'] ?? 'dark'),
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: isUrgent ? const Color(0xFF7F1D1D) : Colors.white,
+                    width: 1.5,
+                  ),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  visible[i]['initials'] ?? 'NA',
+                  style: TextStyle(
+                    fontSize: 8,
+                    fontWeight: FontWeight.w800,
+                    color: _avatarTextColorForTone(
+                      visible[i]['tone'] ?? 'dark',
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          if (extraCount > 0)
+            Positioned(
+              left: visible.length * 14.0,
+              child: Container(
+                width: 24,
+                height: 24,
+                decoration: BoxDecoration(
+                  color: isUrgent ? const Color(0xFFFDE68A) : AppTheme.ink,
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: isUrgent ? const Color(0xFF7F1D1D) : Colors.white,
+                    width: 1.5,
+                  ),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  '+$extraCount',
+                  style: TextStyle(
+                    fontSize: 8,
+                    fontWeight: FontWeight.w800,
+                    color: isUrgent ? const Color(0xFF7F1D1D) : Colors.white,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildStickyCard(_CanvasItem item) {
     final attachments = item.sourceMemo.attachments;
     final checklist = item.sourceMemo.checklist;
     final hasAttachments = attachments.isNotEmpty;
+    final visualState = UrgentFlameHelper.getVisualState(item.sourceMemo);
+    final hasEffect = visualState != MemoCardVisualState.normal;
+    final isDarkFire = visualState == MemoCardVisualState.urgentFire;
+    final assignees = item.sourceMemo.effectiveAssignees;
+
+    final cardContent = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (hasEffect) ...[
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: UrgentFlameBadge(
+              dueDate: item.sourceMemo.dueDate,
+              visualState: visualState,
+            ),
+          ),
+        ],
+        if (hasAttachments) ...[
+          // Attachment Card preview at the top, followed by memo title below
+          _buildAttachmentPreviewBox(attachments.first, attachments.length),
+          const SizedBox(height: 10),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  item.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    color: isDarkFire ? Colors.white : AppTheme.ink,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 4),
+              Icon(
+                Icons.drag_indicator_rounded,
+                size: 15,
+                color: isDarkFire
+                    ? Colors.white.withValues(alpha: 0.65)
+                    : AppTheme.ink.withValues(alpha: 0.25),
+              ),
+            ],
+          ),
+          if (item.sourceMemo.content.trim().isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              item.body,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w500,
+                color: isDarkFire
+                    ? Colors.white.withValues(alpha: 0.85)
+                    : AppTheme.muted,
+                height: 1.4,
+              ),
+            ),
+          ],
+        ] else ...[
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: isDarkFire
+                      ? Colors.white.withValues(alpha: 0.18)
+                      : Colors.white.withValues(alpha: 0.65),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  checklist.isNotEmpty ? Icons.checklist_rounded : item.icon,
+                  size: 15,
+                  color:
+                      isDarkFire ? const Color(0xFFFDE68A) : item.accentColor,
+                ),
+              ),
+              Icon(
+                Icons.drag_indicator_rounded,
+                size: 16,
+                color: isDarkFire
+                    ? Colors.white.withValues(alpha: 0.65)
+                    : AppTheme.ink.withValues(alpha: 0.22),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            item.title,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              color: isDarkFire ? Colors.white : AppTheme.ink,
+            ),
+          ),
+          const SizedBox(height: 6),
+          if (checklist.isNotEmpty)
+            ...checklist.take(3).map((chk) {
+              final done = chk['done'] == true;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Row(
+                  children: [
+                    Icon(
+                      done
+                          ? Icons.check_circle_rounded
+                          : Icons.radio_button_unchecked_rounded,
+                      size: 12,
+                      color: isDarkFire
+                          ? (done ? const Color(0xFFFDE68A) : Colors.white70)
+                          : (done ? AppTheme.olive : AppTheme.muted),
+                    ),
+                    const SizedBox(width: 5),
+                    Expanded(
+                      child: Text(
+                        chk['text']?.toString() ?? '',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: isDarkFire ? Colors.white : AppTheme.ink,
+                          decoration: done ? TextDecoration.lineThrough : null,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            })
+          else
+            Text(
+              item.body,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w500,
+                color: isDarkFire
+                    ? Colors.white.withValues(alpha: 0.85)
+                    : AppTheme.muted,
+                height: 1.5,
+              ),
+            ),
+        ],
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.only(top: 10),
+          decoration: BoxDecoration(
+            border: Border(
+              top: BorderSide(
+                color: isDarkFire
+                    ? Colors.white.withValues(alpha: 0.18)
+                    : AppTheme.ink.withValues(alpha: 0.06),
+              ),
+            ),
+          ),
+          child: Row(
+            children: [
+              _buildCanvasAssigneeAvatars(assignees, isUrgent: isDarkFire),
+              const Spacer(),
+              Text(
+                'Tap to open',
+                style: TextStyle(
+                  fontSize: 9,
+                  fontWeight: FontWeight.w700,
+                  color: isDarkFire
+                      ? Colors.white.withValues(alpha: 0.85)
+                      : AppTheme.muted,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+
+    if (hasEffect) {
+      return UrgentFlameCard(
+        visualState: visualState,
+        width: 198,
+        padding: const EdgeInsets.all(14),
+        borderRadius: 22,
+        child: cardContent,
+      );
+    }
 
     return Container(
       width: 198,
@@ -1347,179 +1837,7 @@ class _CanvasBoardState extends State<CanvasBoard> {
         borderRadius: BorderRadius.circular(22),
         boxShadow: const [AppTheme.shadowCard],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (hasAttachments) ...[
-            // Attachment Card preview at the top, followed by memo title below
-            _buildAttachmentPreviewBox(attachments.first, attachments.length),
-            const SizedBox(height: 10),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Text(
-                    item.title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
-                      color: AppTheme.ink,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 4),
-                Icon(
-                  Icons.drag_indicator_rounded,
-                  size: 15,
-                  color: AppTheme.ink.withValues(alpha: 0.25),
-                ),
-              ],
-            ),
-            if (item.sourceMemo.content.trim().isNotEmpty) ...[
-              const SizedBox(height: 4),
-              Text(
-                item.body,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w500,
-                  color: AppTheme.muted,
-                  height: 1.4,
-                ),
-              ),
-            ],
-          ] else ...[
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.65),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(
-                    checklist.isNotEmpty
-                        ? Icons.checklist_rounded
-                        : item.icon,
-                    size: 15,
-                    color: item.accentColor,
-                  ),
-                ),
-                Icon(
-                  Icons.drag_indicator_rounded,
-                  size: 16,
-                  color: AppTheme.ink.withValues(alpha: 0.22),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              item.title,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
-                color: AppTheme.ink,
-              ),
-            ),
-            const SizedBox(height: 6),
-            if (checklist.isNotEmpty)
-              ...checklist.take(3).map((chk) {
-                final done = chk['done'] == true;
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 4),
-                  child: Row(
-                    children: [
-                      Icon(
-                        done
-                            ? Icons.check_circle_rounded
-                            : Icons.radio_button_unchecked_rounded,
-                        size: 12,
-                        color: done ? AppTheme.olive : AppTheme.muted,
-                      ),
-                      const SizedBox(width: 5),
-                      Expanded(
-                        child: Text(
-                          chk['text']?.toString() ?? '',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                            color: AppTheme.ink,
-                            decoration:
-                                done ? TextDecoration.lineThrough : null,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              })
-            else
-              Text(
-                item.body,
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w500,
-                  color: AppTheme.muted,
-                  height: 1.5,
-                ),
-              ),
-          ],
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.only(top: 10),
-            decoration: BoxDecoration(
-              border: Border(
-                top: BorderSide(
-                  color: AppTheme.ink.withValues(alpha: 0.06),
-                ),
-              ),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 24,
-                  height: 24,
-                  decoration: BoxDecoration(
-                    color: AppTheme.ink,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white, width: 1.5),
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    item.initials,
-                    style: const TextStyle(
-                      fontSize: 8,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-                const Spacer(),
-                const Text(
-                  'Tap to open',
-                  style: TextStyle(
-                    fontSize: 9,
-                    fontWeight: FontWeight.w700,
-                    color: AppTheme.muted,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+      child: cardContent,
     );
   }
 }

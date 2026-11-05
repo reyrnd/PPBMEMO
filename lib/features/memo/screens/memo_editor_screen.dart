@@ -1592,11 +1592,15 @@ class _MemoEditorScreenState extends State<MemoEditorScreen> {
 
   Future<void> _pickDueDate() async {
     if (!_canEdit) return;
-    final initial = DateTime.tryParse(_currentDueDate) ?? DateTime.now();
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final parsed = DateTime.tryParse(_currentDueDate);
+    final initial =
+        (parsed != null && !parsed.isBefore(today)) ? parsed : today;
     final picked = await showDatePicker(
       context: context,
       initialDate: initial,
-      firstDate: DateTime(2024),
+      firstDate: today,
       lastDate: DateTime(2032),
     );
     if (picked != null) {

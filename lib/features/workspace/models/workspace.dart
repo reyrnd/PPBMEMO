@@ -33,6 +33,22 @@ class Workspace {
   String get name => title;
   int get memos => memoCount;
 
+  /// Mengecek apakah user dengan [uid] adalah pemilik (owner) dari workspace ini.
+  bool isOwnedBy(String? uid) {
+    if (uid == null || uid.isEmpty) {
+      return ownerId.isEmpty || ownerId == 'demo-naya';
+    }
+    if (ownerId == uid || ownerId == 'demo-naya') return true;
+    final hasOwnerRole = members.any(
+      (m) => m.userId == uid && m.role == MemberRole.owner,
+    );
+    if (hasOwnerRole) return true;
+    if (ownerId.isEmpty && (members.isEmpty || members.first.userId == uid)) {
+      return true;
+    }
+    return false;
+  }
+
   Workspace copyWith({
     String? id,
     String? category,
@@ -77,6 +93,20 @@ class Workspace {
         updatedAt: DateTime.now(),
       );
     }
+    final rawMembersMap = d['members'] as Map<String, dynamic>? ?? {};
+    String resolvedOwnerId = (d['ownerId'] as String? ?? '').trim();
+    if (resolvedOwnerId.isEmpty) {
+      for (final entry in rawMembersMap.entries) {
+        final mData = entry.value is Map
+            ? Map<String, dynamic>.from(entry.value as Map)
+            : const <String, dynamic>{};
+        if (mData['role'] == 'owner') {
+          resolvedOwnerId = entry.key;
+          break;
+        }
+      }
+    }
+
     return Workspace(
       id: doc.id,
       category: d['category'] ?? '',
@@ -88,8 +118,8 @@ class Workspace {
       updatedAt: (d['updatedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       memberInitials: List<String>.from(d['memberInitials'] ?? const []),
       inviteCode: d['inviteCode'] ?? '',
-      ownerId: d['ownerId'] ?? '',
-      members: (d['members'] as Map<String, dynamic>? ?? {}).entries.map((e) {
+      ownerId: resolvedOwnerId,
+      members: rawMembersMap.entries.map((e) {
         final memberData = Map<String, dynamic>.from(e.value as Map);
         final name = memberData['name'] as String? ?? '';
         final parts = name

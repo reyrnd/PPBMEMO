@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../../../core/app_theme.dart';
 import '../../../../core/widgets/app_bottom_sheet.dart';
+import '../../../../core/widgets/urgent_flame_card.dart';
 import '../../memo/cubit/memo_cubit.dart';
 import '../../memo/models/memo.dart';
 import '../../memo/screens/memo_editor_screen.dart';
@@ -179,16 +180,42 @@ class _KanbanBoardState extends State<KanbanBoard> {
     final noteCtrl = TextEditingController(text: existingMemo?.content ?? '');
 
     final assignees = _resolveAssignees();
-    String selectedAssignee = existingMemo?.assignee.isNotEmpty == true
-        ? existingMemo!.assignee
-        : assignees.first['initials']!;
-    String selectedTone = existingMemo?.assigneeTone.isNotEmpty == true
-        ? existingMemo!.assigneeTone
-        : assignees.first['tone']!;
+    final List<Map<String, String>> selectedAssignees =
+        existingMemo != null && existingMemo.effectiveAssignees.isNotEmpty
+            ? existingMemo.effectiveAssignees
+                .map((e) => Map<String, String>.from(e))
+                .toList()
+            : [Map<String, String>.from(assignees.first)];
     String selectedDate = existingMemo?.dueDate ?? '';
     String selectedStatus = existingMemo != null
         ? _normalizeStatus(existingMemo)
         : columnId;
+
+    bool isMemberSelected(String initials, String name) {
+      return selectedAssignees.any(
+        (m) =>
+            m['initials'] == initials &&
+            (m['name'] == name || m['name'] == initials),
+      );
+    }
+
+    void toggleMember(Map<String, String> member, StateSetter setSheetState) {
+      setSheetState(() {
+        final idx = selectedAssignees.indexWhere(
+          (m) =>
+              m['initials'] == member['initials'] &&
+              (m['name'] == member['name'] ||
+                  m['name'] == member['initials']),
+        );
+        if (idx >= 0) {
+          if (selectedAssignees.length > 1) {
+            selectedAssignees.removeAt(idx);
+          }
+        } else {
+          selectedAssignees.add(Map<String, String>.from(member));
+        }
+      });
+    }
 
     showModalBottomSheet<void>(
       context: context,
@@ -371,7 +398,7 @@ class _KanbanBoardState extends State<KanbanBoard> {
                   ),
                   const SizedBox(height: 10),
 
-                  // Assign Teammate
+                  // Assign Teammates (Multi-select)
                   Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 14,
@@ -385,83 +412,125 @@ class _KanbanBoardState extends State<KanbanBoard> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'ASSIGN TEAMMATE',
-                          style: TextStyle(
-                            fontSize: 9,
-                            fontWeight: FontWeight.w700,
-                            color: AppTheme.faint,
-                            letterSpacing: 0.8,
-                          ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'ASSIGN TEAMMATES (${selectedAssignees.length} DIPILIH)',
+                              style: const TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w700,
+                                color: AppTheme.faint,
+                                letterSpacing: 0.8,
+                              ),
+                            ),
+                            GestureDetector(
+                              onTap: () => setSheetState(() {
+                                if (selectedAssignees.length ==
+                                    assignees.length) {
+                                  selectedAssignees
+                                    ..clear()
+                                    ..add(
+                                      Map<String, String>.from(assignees.first),
+                                    );
+                                } else {
+                                  selectedAssignees
+                                    ..clear()
+                                    ..addAll(
+                                      assignees.map(
+                                        (e) => Map<String, String>.from(e),
+                                      ),
+                                    );
+                                }
+                              }),
+                              child: Text(
+                                selectedAssignees.length == assignees.length
+                                    ? 'Reset'
+                                    : 'Pilih semua',
+                                style: const TextStyle(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppTheme.olive,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 10),
-                        SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: Row(
-                            children: assignees.map((a) {
-                              final initials = a['initials']!;
-                              final name = a['name']!;
-                              final tone = a['tone']!;
-                              final isSelected = selectedAssignee == initials;
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: assignees.map((a) {
+                            final initials = a['initials']!;
+                            final name = a['name']!;
+                            final tone = a['tone']!;
+                            final isSelected = isMemberSelected(initials, name);
 
-                              return Padding(
-                                padding: const EdgeInsets.only(right: 8),
-                                child: GestureDetector(
-                                  onTap: () => setSheetState(() {
-                                    selectedAssignee = initials;
-                                    selectedTone = tone;
-                                  }),
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 10,
-                                      vertical: 6,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: isSelected
-                                          ? AppTheme.ink
-                                          : AppTheme.surface,
-                                      borderRadius: BorderRadius.circular(20),
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Container(
-                                          width: 22,
-                                          height: 22,
-                                          decoration: BoxDecoration(
-                                            color: _avatarBgForTone(tone),
-                                            shape: BoxShape.circle,
-                                          ),
-                                          alignment: Alignment.center,
-                                          child: Text(
-                                            initials,
-                                            style: TextStyle(
-                                              fontSize: 8,
-                                              fontWeight: FontWeight.w700,
-                                              color: _avatarTextColorForTone(
-                                                tone,
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 6),
-                                        Text(
-                                          name,
-                                          style: TextStyle(
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.w700,
-                                            color: isSelected
-                                                ? Colors.white
-                                                : AppTheme.ink,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
+                            return GestureDetector(
+                              onTap: () => toggleMember(a, setSheetState),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 150),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: isSelected
+                                      ? AppTheme.ink
+                                      : AppTheme.surface,
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color: isSelected
+                                        ? AppTheme.ink
+                                        : AppTheme.line,
                                   ),
                                 ),
-                              );
-                            }).toList(),
-                          ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Container(
+                                      width: 22,
+                                      height: 22,
+                                      decoration: BoxDecoration(
+                                        color: _avatarBgForTone(tone),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      alignment: Alignment.center,
+                                      child: Text(
+                                        initials,
+                                        style: TextStyle(
+                                          fontSize: 8,
+                                          fontWeight: FontWeight.w700,
+                                          color: _avatarTextColorForTone(
+                                            tone,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      name,
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w700,
+                                        color: isSelected
+                                            ? Colors.white
+                                            : AppTheme.ink,
+                                      ),
+                                    ),
+                                    if (isSelected) ...[
+                                      const SizedBox(width: 5),
+                                      const Icon(
+                                        Icons.check_circle_rounded,
+                                        size: 13,
+                                        color: AppTheme.mint,
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                            );
+                          }).toList(),
                         ),
                       ],
                     ),
@@ -512,13 +581,17 @@ class _KanbanBoardState extends State<KanbanBoard> {
                         const SizedBox(height: 8),
                         GestureDetector(
                           onTap: () async {
+                            final now = DateTime.now();
+                            final today = DateTime(now.year, now.month, now.day);
+                            final parsed = DateTime.tryParse(selectedDate);
                             final initial =
-                                DateTime.tryParse(selectedDate) ??
-                                DateTime.now();
+                                (parsed != null && !parsed.isBefore(today))
+                                    ? parsed
+                                    : today;
                             final picked = await showDatePicker(
                               context: ctx,
                               initialDate: initial,
-                              firstDate: DateTime(2024),
+                              firstDate: today,
                               lastDate: DateTime(2032),
                             );
                             if (picked != null) {
@@ -630,6 +703,12 @@ class _KanbanBoardState extends State<KanbanBoard> {
                                   orElse: () => {'title': selectedStatus},
                                 )['title'] as String;
 
+                            final joinedInitials = selectedAssignees
+                                .map((a) => a['initials'] ?? 'NA')
+                                .join(', ');
+                            final primaryTone =
+                                selectedAssignees.first['tone'] ?? 'dark';
+
                             if (isEdit) {
                               await context.read<MemoCubit>().updateMemo(
                                     widget.workspaceId,
@@ -638,8 +717,11 @@ class _KanbanBoardState extends State<KanbanBoard> {
                                     noteCtrl.text.trim(),
                                     dueDate: selectedDate,
                                     status: selectedStatus,
-                                    assignee: selectedAssignee,
-                                    assigneeTone: selectedTone,
+                                    assignee: joinedInitials,
+                                    assigneeTone: primaryTone,
+                                    assignees: List<Map<String, String>>.from(
+                                      selectedAssignees,
+                                    ),
                                   );
                             } else {
                               await context.read<MemoCubit>().addMemo(
@@ -649,8 +731,11 @@ class _KanbanBoardState extends State<KanbanBoard> {
                                     tag: widget.workspaceName,
                                     dueDate: selectedDate,
                                     status: selectedStatus,
-                                    assignee: selectedAssignee,
-                                    assigneeTone: selectedTone,
+                                    assignee: joinedInitials,
+                                    assigneeTone: primaryTone,
+                                    assignees: List<Map<String, String>>.from(
+                                      selectedAssignees,
+                                    ),
                                   );
                             }
                             if (!ctx.mounted) return;
@@ -700,6 +785,11 @@ class _KanbanBoardState extends State<KanbanBoard> {
 
   void _openTaskDetail(Memo memo, String columnTitle) {
     final currentStatus = _normalizeStatus(memo);
+    final assignedList = memo.effectiveAssignees;
+    final assignedNames = assignedList
+        .map((a) => (a['name'] ?? a['initials'] ?? '').trim())
+        .where((s) => s.isNotEmpty)
+        .join(', ');
 
     showModalBottomSheet<void>(
       context: context,
@@ -707,7 +797,7 @@ class _KanbanBoardState extends State<KanbanBoard> {
       backgroundColor: Colors.transparent,
       builder: (ctx) => SheetFrame(
         title: memo.title.isEmpty ? 'Untitled task' : memo.title,
-        description: '$columnTitle · Assigned to ${memo.assignee}',
+        description: '$columnTitle · Assigned to $assignedNames',
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -731,7 +821,84 @@ class _KanbanBoardState extends State<KanbanBoard> {
                 ),
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
+
+            // Assigned Teammates Chips
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: const [AppTheme.shadowSoft],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'ASSIGNED TEAMMATES (${assignedList.length})',
+                    style: const TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.faint,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: assignedList.map((a) {
+                      final ini = a['initials'] ?? 'NA';
+                      final nm = a['name'] ?? ini;
+                      final tn = a['tone'] ?? 'dark';
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppTheme.surface,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 20,
+                              height: 20,
+                              decoration: BoxDecoration(
+                                color: _avatarBgForTone(tn),
+                                shape: BoxShape.circle,
+                              ),
+                              alignment: Alignment.center,
+                              child: Text(
+                                ini,
+                                style: TextStyle(
+                                  fontSize: 8,
+                                  fontWeight: FontWeight.w700,
+                                  color: _avatarTextColorForTone(tn),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              nm,
+                              style: const TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                color: AppTheme.ink,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
 
             // Quick Move Column Row
             Container(
@@ -1144,6 +1311,94 @@ class _KanbanBoardState extends State<KanbanBoard> {
     );
   }
 
+  Widget _buildStackedAssigneeAvatars(
+    List<Map<String, String>> assignees, {
+    required bool isUrgent,
+  }) {
+    final visible = assignees.take(4).toList();
+    final extraCount = assignees.length - visible.length;
+    final totalWidth = 22.0 + (visible.length - 1) * 14.0 + (extraCount > 0 ? 16.0 : 0.0);
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          width: totalWidth,
+          height: 22,
+          child: Stack(
+            children: [
+              for (int i = 0; i < visible.length; i++)
+                Positioned(
+                  left: i * 14.0,
+                  child: Container(
+                    width: 22,
+                    height: 22,
+                    decoration: BoxDecoration(
+                      color: _avatarBgForTone(visible[i]['tone'] ?? 'dark'),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: isUrgent ? const Color(0xFF7F1D1D) : Colors.white,
+                        width: 1.5,
+                      ),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      visible[i]['initials'] ?? 'NA',
+                      style: TextStyle(
+                        fontSize: 7.5,
+                        fontWeight: FontWeight.w800,
+                        color: _avatarTextColorForTone(
+                          visible[i]['tone'] ?? 'dark',
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              if (extraCount > 0)
+                Positioned(
+                  left: visible.length * 14.0,
+                  child: Container(
+                    width: 22,
+                    height: 22,
+                    decoration: BoxDecoration(
+                      color: isUrgent ? const Color(0xFFFDE68A) : AppTheme.ink,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: isUrgent ? const Color(0xFF7F1D1D) : Colors.white,
+                        width: 1.5,
+                      ),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      '+$extraCount',
+                      style: TextStyle(
+                        fontSize: 7.5,
+                        fontWeight: FontWeight.w800,
+                        color: isUrgent ? const Color(0xFF7F1D1D) : Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        if (assignees.length > 1) ...[
+          const SizedBox(width: 4),
+          Text(
+            '${assignees.length} org',
+            style: TextStyle(
+              fontSize: 8.5,
+              fontWeight: FontWeight.w700,
+              color: isUrgent
+                  ? Colors.white.withValues(alpha: 0.85)
+                  : AppTheme.muted,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
   Widget _buildKanbanCard(
     Memo memo,
     String colId,
@@ -1151,11 +1406,220 @@ class _KanbanBoardState extends State<KanbanBoard> {
     bool isDraggingFeedback = false,
   }) {
     final dueDate = memo.dueDate;
-    final tone = memo.assigneeTone.isEmpty ? 'dark' : memo.assigneeTone;
-    final assignee = memo.assignee.isEmpty ? 'NA' : memo.assignee;
+    final assignees = memo.effectiveAssignees;
     final doneChecklist =
         memo.checklist.where((c) => c['done'] == true).length;
     final canEdit = _canEditMemo(memo);
+    final visualState =
+        UrgentFlameHelper.getVisualState(memo, overrideStatus: colId);
+    final hasEffect = visualState != MemoCardVisualState.normal;
+    final isDarkFire = visualState == MemoCardVisualState.urgentFire;
+
+    final cardBody = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (hasEffect) ...[
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: UrgentFlameBadge(
+              dueDate: dueDate,
+              visualState: visualState,
+            ),
+          ),
+        ],
+        GestureDetector(
+          onTap: isDraggingFeedback
+              ? null
+              : () => _openTaskDetail(memo, colTitle),
+          behavior: HitTestBehavior.opaque,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(top: 1, right: 6),
+                    child: Icon(
+                      Icons.drag_indicator_rounded,
+                      size: 14,
+                      color: isDarkFire
+                          ? Colors.white.withValues(alpha: 0.7)
+                          : AppTheme.faint,
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      memo.title.isEmpty ? 'Untitled task' : memo.title,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        color: isDarkFire ? Colors.white : AppTheme.ink,
+                        height: 1.35,
+                      ),
+                    ),
+                  ),
+                  if (!isDraggingFeedback && canEdit) ...[
+                    const SizedBox(width: 6),
+                    GestureDetector(
+                      onTap: () =>
+                          _openTaskFormSheet(colId, existingMemo: memo),
+                      child: Container(
+                        width: 24,
+                        height: 24,
+                        decoration: BoxDecoration(
+                          color: isDarkFire
+                              ? Colors.white.withValues(alpha: 0.18)
+                              : Colors.white.withValues(alpha: 0.75),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.edit_outlined,
+                          size: 11,
+                          color: isDarkFire ? Colors.white : AppTheme.muted,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                memo.preview,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 10,
+                  color: isDarkFire
+                      ? Colors.white.withValues(alpha: 0.85)
+                      : AppTheme.muted,
+                  height: 1.45,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            _buildStackedAssigneeAvatars(assignees, isUrgent: isDarkFire),
+            const SizedBox(width: 6),
+            if (memo.checklist.isNotEmpty)
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 6,
+                  vertical: 2,
+                ),
+                decoration: BoxDecoration(
+                  color: isDarkFire
+                      ? Colors.white.withValues(alpha: 0.2)
+                      : AppTheme.mint,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  '$doneChecklist/${memo.checklist.length}',
+                  style: TextStyle(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                    color: isDarkFire ? Colors.white : AppTheme.olive,
+                  ),
+                ),
+              ),
+            const Spacer(),
+            if (dueDate.isNotEmpty)
+              DeadlineBadge(
+                date: dueDate,
+                completed: colId == 'done',
+                onTap: (isDraggingFeedback || !canEdit)
+                    ? null
+                    : () => _openTaskFormSheet(colId, existingMemo: memo),
+              )
+            else if (!isDraggingFeedback && canEdit)
+              GestureDetector(
+                onTap: () => _openTaskFormSheet(colId, existingMemo: memo),
+                child: Text(
+                  'Add date',
+                  style: TextStyle(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                    color: isDarkFire
+                        ? Colors.white.withValues(alpha: 0.8)
+                        : AppTheme.faint,
+                  ),
+                ),
+              ),
+          ],
+        ),
+
+        // Quick move column buttons at bottom of card for instant 1-tap move
+        if (!isDraggingFeedback) ...[
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.only(top: 6),
+            decoration: BoxDecoration(
+              border: Border(
+                top: BorderSide(
+                  color: isDarkFire
+                      ? Colors.white.withValues(alpha: 0.18)
+                      : AppTheme.line,
+                ),
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: _columnDefs.map((col) {
+                final targetId = col['id'] as String;
+                final targetTitle = col['title'] as String;
+                final isCurrent = colId == targetId;
+                return GestureDetector(
+                  onTap: isCurrent
+                      ? null
+                      : () => _moveCardToColumn(memo, targetId),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 7,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isDarkFire
+                          ? (isCurrent
+                              ? const Color(0xFFFDE68A)
+                              : Colors.white.withValues(alpha: 0.14))
+                          : (isCurrent
+                              ? AppTheme.ink
+                              : Colors.white.withValues(alpha: 0.75)),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      targetTitle,
+                      style: TextStyle(
+                        fontSize: 8,
+                        fontWeight: FontWeight.w700,
+                        color: isDarkFire
+                            ? (isCurrent
+                                ? const Color(0xFF7F1D1D)
+                                : Colors.white)
+                            : (isCurrent ? Colors.white : AppTheme.muted),
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        ],
+      ],
+    );
+
+    if (hasEffect) {
+      return UrgentFlameCard(
+        visualState: visualState,
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.all(14),
+        borderRadius: 20,
+        child: cardBody,
+      );
+    }
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -1165,182 +1629,7 @@ class _KanbanBoardState extends State<KanbanBoard> {
         borderRadius: BorderRadius.circular(20),
         boxShadow: const [AppTheme.shadowSoft],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          GestureDetector(
-            onTap: isDraggingFeedback
-                ? null
-                : () => _openTaskDetail(memo, colTitle),
-            behavior: HitTestBehavior.opaque,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Padding(
-                      padding: EdgeInsets.only(top: 1, right: 6),
-                      child: Icon(
-                        Icons.drag_indicator_rounded,
-                        size: 14,
-                        color: AppTheme.faint,
-                      ),
-                    ),
-                    Expanded(
-                      child: Text(
-                        memo.title.isEmpty ? 'Untitled task' : memo.title,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: AppTheme.ink,
-                          height: 1.35,
-                        ),
-                      ),
-                    ),
-                    if (!isDraggingFeedback && canEdit) ...[
-                      const SizedBox(width: 6),
-                      GestureDetector(
-                        onTap: () =>
-                            _openTaskFormSheet(colId, existingMemo: memo),
-                        child: Container(
-                          width: 24,
-                          height: 24,
-                          decoration: const BoxDecoration(
-                            color: AppTheme.surface,
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.edit_outlined,
-                            size: 11,
-                            color: AppTheme.muted,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  memo.preview,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 10,
-                    color: AppTheme.muted,
-                    height: 1.45,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Container(
-                width: 22,
-                height: 22,
-                decoration: BoxDecoration(
-                  color: _avatarBgForTone(tone),
-                  shape: BoxShape.circle,
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  assignee,
-                  style: TextStyle(
-                    fontSize: 8,
-                    fontWeight: FontWeight.w700,
-                    color: _avatarTextColorForTone(tone),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 6),
-              if (memo.checklist.isNotEmpty)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 6,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppTheme.mint,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    '$doneChecklist/${memo.checklist.length}',
-                    style: const TextStyle(
-                      fontSize: 9,
-                      fontWeight: FontWeight.w700,
-                      color: AppTheme.olive,
-                    ),
-                  ),
-                ),
-              const Spacer(),
-              if (dueDate.isNotEmpty)
-                DeadlineBadge(
-                  date: dueDate,
-                  completed: colId == 'done',
-                  onTap: (isDraggingFeedback || !canEdit)
-                      ? null
-                      : () => _openTaskFormSheet(colId, existingMemo: memo),
-                )
-              else if (!isDraggingFeedback && canEdit)
-                GestureDetector(
-                  onTap: () => _openTaskFormSheet(colId, existingMemo: memo),
-                  child: const Text(
-                    'Add date',
-                    style: TextStyle(
-                      fontSize: 9,
-                      fontWeight: FontWeight.w700,
-                      color: AppTheme.faint,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-
-          // Quick move column buttons at bottom of card for instant 1-tap move
-          if (!isDraggingFeedback) ...[
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.only(top: 6),
-              decoration: const BoxDecoration(
-                border: Border(top: BorderSide(color: AppTheme.line)),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: _columnDefs.map((col) {
-                  final targetId = col['id'] as String;
-                  final targetTitle = col['title'] as String;
-                  final isCurrent = colId == targetId;
-                  return GestureDetector(
-                    onTap: isCurrent
-                        ? null
-                        : () => _moveCardToColumn(memo, targetId),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 7,
-                        vertical: 3,
-                      ),
-                      decoration: BoxDecoration(
-                        color: isCurrent ? AppTheme.ink : AppTheme.canvas,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        targetTitle,
-                        style: TextStyle(
-                          fontSize: 8,
-                          fontWeight: FontWeight.w700,
-                          color: isCurrent ? Colors.white : AppTheme.muted,
-                        ),
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-            ),
-          ],
-        ],
-      ),
+      child: cardBody,
     );
   }
 }

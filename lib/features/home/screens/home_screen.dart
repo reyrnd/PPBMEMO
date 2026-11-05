@@ -5,6 +5,7 @@ import '../../../core/app_theme.dart';
 import '../../../core/utils/date_formatter.dart';
 import '../../../core/widgets/app_bottom_sheet.dart';
 import '../../../core/widgets/avatar_stack.dart';
+import '../../../core/widgets/urgent_flame_card.dart';
 import '../../activity/data/activity_repository.dart';
 import '../../activity/models/activity.dart';
 import '../../activity/screens/activity_screen.dart';
@@ -49,6 +50,7 @@ class HomeScreen extends StatelessWidget {
               _buildSectionTitle('Quick actions'),
               const SizedBox(height: 12),
               _buildQuickActionsGrid(context),
+              _buildApproachingDeadlinesSection(context),
               const SizedBox(height: 24),
               _buildSectionTitle(
                 'Recent memos',
@@ -767,6 +769,139 @@ class HomeScreen extends StatelessWidget {
           );
         }
         return const SizedBox.shrink();
+      },
+    );
+  }
+
+  Widget _buildApproachingDeadlinesSection(BuildContext context) {
+    final workspaces = context.watch<WorkspaceCubit>().state;
+    final workspaceNames = {
+      for (final ws in workspaces) ws.id: ws.name,
+    };
+
+    return BlocBuilder<MemoCubit, MemoState>(
+      builder: (context, state) {
+        if (state is! MemoLoaded) return const SizedBox.shrink();
+
+        final urgentMemos = state.memos
+            .where((m) => UrgentFlameHelper.isApproachingOrOverdue(m))
+            .toList()
+          ..sort((a, b) => a.dueDate.compareTo(b.dueDate));
+
+        if (urgentMemos.isEmpty) return const SizedBox.shrink();
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 24),
+            _buildSectionTitle(
+              'Mendekati deadline (${urgentMemos.length})',
+              actionText: 'See all',
+              onAction: () => MainShellScope.of(context)?.switchTab(1),
+            ),
+            const SizedBox(height: 12),
+            ...urgentMemos.take(4).map((memo) {
+              final visualState = UrgentFlameHelper.getVisualState(memo);
+              final isDarkFire =
+                  visualState == MemoCardVisualState.urgentFire;
+              final wsName = workspaceNames[memo.workspaceId] ?? memo.tag;
+
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 10.0),
+                child: GestureDetector(
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => MemoEditorScreen(
+                        memoId: memo.id,
+                        workspaceId: memo.workspaceId,
+                      ),
+                    ),
+                  ),
+                  child: UrgentFlameCard(
+                    visualState: visualState,
+                    padding: const EdgeInsets.all(15),
+                    borderRadius: 22,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            UrgentFlameBadge(
+                              dueDate: memo.dueDate,
+                              visualState: visualState,
+                            ),
+                            DeadlineBadge(date: memo.dueDate),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          memo.title.isEmpty ? 'Untitled memo' : memo.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                            color: isDarkFire ? Colors.white : AppTheme.ink,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          memo.preview,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                            color: isDarkFire
+                                ? Colors.white.withValues(alpha: 0.85)
+                                : AppTheme.muted,
+                            height: 1.4,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.workspaces_rounded,
+                              size: 12,
+                              color: isDarkFire
+                                  ? const Color(0xFFFDE68A)
+                                  : AppTheme.caramel,
+                            ),
+                            const SizedBox(width: 5),
+                            Expanded(
+                              child: Text(
+                                '$wsName · Oleh ${memo.authorName}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                  color: isDarkFire
+                                      ? Colors.white.withValues(alpha: 0.85)
+                                      : AppTheme.ink,
+                                ),
+                              ),
+                            ),
+                            Icon(
+                              Icons.arrow_forward_ios_rounded,
+                              size: 11,
+                              color: isDarkFire
+                                  ? Colors.white70
+                                  : AppTheme.muted,
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }),
+          ],
+        );
       },
     );
   }
